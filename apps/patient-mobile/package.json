@@ -1,12 +1,32 @@
 {
   "name": "@heyjule/patient-mobile",
   "version": "0.0.0",
-  "private": true,
-  "description": "Patient-facing mobile app: wearable aggregation, voice/message symptom logging, reminders.",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo-google-fonts/fraunces": "^0.4.1",
+    "@expo-google-fonts/hanken-grotesk": "^0.4.3",
+    "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
+    "expo": "~57.0.4",
+    "expo-blur": "~57.0.2",
+    "expo-font": "~57.0.1",
+    "expo-haptics": "~57.0.1",
+    "expo-status-bar": "~57.0.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
   "scripts": {
-    "dev": "echo \"TODO: expo start\" && exit 0",
-    "build": "echo \"TODO: build patient-mobile\" && exit 0",
-    "lint": "echo \"TODO: lint patient-mobile\" && exit 0",
-    "typecheck": "echo \"TODO: typecheck patient-mobile\" && exit 0"
-  }
+    "start": "expo start",
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
 }
