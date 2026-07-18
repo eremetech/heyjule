@@ -1,0 +1,12 @@
+{
+  "name": "@heyjule/doctor-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Doctor-facing web app: share code/QR with patients, view interactive summaries/reports.",
+  "scripts": {
+    "dev": "echo \"TODO: next dev\" && exit 0",
+    "build": "echo \"TODO: build doctor-web\" && exit 0",
+    "lint": "echo \"TODO: lint doctor-web\" && exit 0",
+    "typecheck": "echo \"TODO: typecheck doctor-web\" && exit 0"
+  }
+}

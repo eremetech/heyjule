@@ -1,0 +1,12 @@
+{
+  "name": "@heyjule/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed client SDK for services/api, shared by patient-mobile and doctor-web.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "lint": "echo \"TODO: lint api-client\" && exit 0",
+    "typecheck": "echo \"TODO: typecheck api-client\" && exit 0"
+  }
+}

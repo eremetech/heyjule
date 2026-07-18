@@ -1,0 +1,12 @@
+{
+  "name": "@heyjule/conversation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Voice/message symptom logging and patient reminders.",
+  "scripts": {
+    "dev": "echo \"TODO: run conversation\" && exit 0",
+    "build": "echo \"TODO: build conversation\" && exit 0",
+    "lint": "echo \"TODO: lint conversation\" && exit 0",
+    "typecheck": "echo \"TODO: typecheck conversation\" && exit 0"
+  }
+}

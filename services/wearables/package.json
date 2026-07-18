@@ -1,0 +1,12 @@
+{
+  "name": "@heyjule/wearables",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Wearable data ingestion & aggregation (Apple Health, Fitbit, Oura, ...).",
+  "scripts": {
+    "dev": "echo \"TODO: run wearables\" && exit 0",
+    "build": "echo \"TODO: build wearables\" && exit 0",
+    "lint": "echo \"TODO: lint wearables\" && exit 0",
+    "typecheck": "echo \"TODO: typecheck wearables\" && exit 0"
+  }
+}

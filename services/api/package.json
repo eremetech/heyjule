@@ -1,0 +1,12 @@
+{
+  "name": "@heyjule/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Core API gateway — the connection layer wiring patient data, services, and doctors together.",
+  "scripts": {
+    "dev": "echo \"TODO: run api\" && exit 0",
+    "build": "echo \"TODO: build api\" && exit 0",
+    "lint": "echo \"TODO: lint api\" && exit 0",
+    "typecheck": "echo \"TODO: typecheck api\" && exit 0"
+  }
+}

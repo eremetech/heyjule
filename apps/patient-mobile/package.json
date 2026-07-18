@@ -1,0 +1,12 @@
+{
+  "name": "@heyjule/patient-mobile",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Patient-facing mobile app: wearable aggregation, voice/message symptom logging, reminders.",
+  "scripts": {
+    "dev": "echo \"TODO: expo start\" && exit 0",
+    "build": "echo \"TODO: build patient-mobile\" && exit 0",
+    "lint": "echo \"TODO: lint patient-mobile\" && exit 0",
+    "typecheck": "echo \"TODO: typecheck patient-mobile\" && exit 0"
+  }
+}

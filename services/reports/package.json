@@ -1,0 +1,12 @@
+{
+  "name": "@heyjule/reports",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Interactive summary/report generation for doctors.",
+  "scripts": {
+    "dev": "echo \"TODO: run reports\" && exit 0",
+    "build": "echo \"TODO: build reports\" && exit 0",
+    "lint": "echo \"TODO: lint reports\" && exit 0",
+    "typecheck": "echo \"TODO: typecheck reports\" && exit 0"
+  }
+}
