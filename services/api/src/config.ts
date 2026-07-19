@@ -12,6 +12,7 @@ export type ApiConfig = {
   trustProxy: boolean;
   production: boolean;
   devTokens: string | undefined;
+  xaiApiKey: string | undefined;
 };
 
 function required(name: string) {
@@ -47,5 +48,6 @@ export function loadConfig(): ApiConfig {
     trustProxy: process.env.HEYJULE_TRUST_PROXY === "true",
     production,
     devTokens,
+    xaiApiKey: process.env.XAI_API_KEY?.trim() || undefined,
   };
 }

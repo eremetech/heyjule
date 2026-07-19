@@ -53,6 +53,7 @@ function testConfig(): ApiConfig {
     trustProxy: false,
     production: false,
     devTokens: undefined,
+    xaiApiKey: undefined,
   };
 }
 
@@ -163,6 +164,53 @@ test("the authenticated session endpoint binds a mobile journal to its patient a
     assert.equal(anonymous.status, 401);
   } finally {
     await app.close();
+  }
+});
+
+test("voice tokens are short-lived, patient-authenticated, and keep the xAI key server-side", async () => {
+  const config = { ...testConfig(), xaiApiKey: "xai-server-secret" };
+  const database = new ApiDatabase(":memory:", config.dataKey);
+  const providerRequests: Array<{ input: string; init?: RequestInit }> = [];
+  const app = createApiServer({
+    config,
+    database,
+    authenticate,
+    fetch: async (input, init) => {
+      providerRequests.push({ input: String(input), init });
+      return Response.json({ value: "xai-client-secret-test", expires_at: 1_800_000_000 });
+    },
+  });
+  await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  const address = app.server.address() as AddressInfo;
+  const origin = `http://127.0.0.1:${address.port}`;
+  try {
+    const anonymous = await api(origin, "/v1/voice/token", { method: "POST" });
+    assert.equal(anonymous.status, 401);
+    assert.equal(providerRequests.length, 0);
+
+    const response = await api(origin, "/v1/voice/token", {
+      method: "POST",
+      token: "patient-token",
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      token: "xai-client-secret-test",
+      expiresAt: 1_800_000_000,
+    });
+    assert.equal(providerRequests.length, 1);
+    assert.equal(providerRequests[0]?.input, "https://api.x.ai/v1/realtime/client_secrets");
+    assert.equal(
+      new Headers(providerRequests[0]?.init?.headers).get("Authorization"),
+      "Bearer xai-server-secret",
+    );
+    assert.deepEqual(JSON.parse(String(providerRequests[0]?.init?.body)), {
+      expires_after: { seconds: 300 },
+    });
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      app.server.close((error) => (error ? reject(error) : resolve())),
+    );
+    database.close();
   }
 });
 

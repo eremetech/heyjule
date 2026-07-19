@@ -6,7 +6,8 @@ Expo / React Native app for private daily symptom check-ins and patient-controll
 
 - Reference-matched home and conversational check-in screens.
 - Continuously morphing SVG orb with idle, listening, thinking, and saved states.
-- Real microphone permission, recording, duration, and live audio metering through `expo-audio`.
+- Full-duplex xAI Voice Agent conversations with live transcription, barge-in,
+  PCM streaming/playback, duration, and audio metering.
 - Text check-in with contextual follow-up prompts.
 - Review and save flow for notes, symptom tags, severity, and treatments.
 - Progress overview with symptom intensity, frequent symptoms, and wearable summary cards.
@@ -21,7 +22,7 @@ Native symptom logs and access grants are stored with `expo-secure-store`. The w
 
 ## Run it
 
-This app targets **Expo SDK 54**, which matches the App Store / Play Store build of Expo Go on physical devices (as of mid-2026, store Expo Go has not tracked newer SDKs).
+This app targets **Expo SDK 54**.
 
 From the repository root:
 
@@ -30,9 +31,10 @@ pnpm install
 pnpm --filter @heyjule/patient-mobile dev
 ```
 
-Scan the QR code in the App Store Expo Go app, or press `i` for iOS Simulator, `a` for Android, or `w` for the web preview.
+The realtime voice path uses `react-native-audio-api`, so run it in an Expo
+development build (not Expo Go). The web preview remains useful for non-voice UI.
 
-Backend sign-in requires a development build because OAuth redirects use the
+Backend sign-in also requires a development build because OAuth redirects use the
 app's `heyjule://oauth/callback` scheme. Copy `.env.example` to `.env.local`,
 set the API/OIDC public identifiers, register that redirect URI with the OAuth
 provider, and run an iOS or Android development build. The app remains a local,
@@ -59,8 +61,15 @@ Failed uploads remain pending and retry on foregrounding and periodically.
 
 The following integrations remain intentionally separate:
 
-- `src/lib/conversation-client.ts` is the boundary for ElevenLabs Conversational AI. The app should request a short-lived signed conversation URL from `services/conversation`; never put an ElevenLabs API secret in `EXPO_PUBLIC_*` or the mobile bundle.
-- Completed voice recordings currently stay local. Upload/transcription should go through the signed conversation session and explicit retention rules.
+- `src/lib/conversation-client.ts` connects directly to xAI using a five-minute
+  ephemeral token minted by `services/api`. The permanent `XAI_API_KEY` is
+  server-only and must never be placed in `EXPO_PUBLIC_*` or the mobile bundle.
+- Voice audio is streamed to xAI in real time and is not retained by HeyJule.
+  User transcripts are added to the local check-in only after xAI completes a
+  turn; the user can edit them before saving.
+- Do not send production PHI until the required xAI enterprise agreements,
+  including a BAA where applicable, and the deployment's consent/retention
+  controls are in place. HIPAA eligibility is not a substitute for those steps.
 - Share grants are currently created on-device to exercise the consent and revocation UI. `services/api` must issue the real opaque token, enforce scope and expiry, and back the `/r/[token]` doctor route before links are externally usable.
 - Wearable summary cards are presentation data until HealthKit / Health Connect and `services/wearables` are connected.
 - Doctor-only report export still needs a doctor-selection/enrollment experience.

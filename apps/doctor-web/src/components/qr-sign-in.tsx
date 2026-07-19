@@ -9,10 +9,12 @@ export function QrSignIn({
   channel,
   qrDataUrl,
   patientName,
+  mockApproveUrl,
 }: {
   channel: string;
   qrDataUrl: string;
   patientName: string;
+  mockApproveUrl?: string;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<"pending" | "approved" | "expired">("pending");
@@ -53,12 +55,24 @@ export function QrSignIn({
         <img src={qrDataUrl} alt="Sign-in QR code" width={220} height={220} />
       </div>
       {status === "pending" && (
-        <p className="qr-hint">
-          Scan with the HeyJule app on your phone.
-          <br />
-          This tab signs in automatically — no password, and access ends when
-          you close it.
-        </p>
+        <>
+          <p className="qr-hint">
+            Scan with the HeyJule app on your phone.
+            <br />
+            This tab signs in automatically — no password, and access ends when
+            you close it.
+          </p>
+          {mockApproveUrl && (
+            <a
+              className="qr-mock-link"
+              href={mockApproveUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open mock phone approval ↗
+            </a>
+          )}
+        </>
       )}
       {status === "approved" && <p className="qr-hint">Approved — opening the report…</p>}
       {status === "expired" && (

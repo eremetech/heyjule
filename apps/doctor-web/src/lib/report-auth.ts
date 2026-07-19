@@ -23,8 +23,16 @@ export function issueViewerSession(reportLinkId: string) {
 
 /* True when the request carries a live viewer session for THIS report link. */
 export async function hasViewerSession(link: ReportLink) {
+  return (await getAuthorizedViewerSessionHash(link)) != null;
+}
+
+/* Returns a privacy-preserving request key only after the session has been
+ * proven to belong to this exact report. It is suitable for rate limiting and
+ * OpenAI's safety identifier; the raw cookie never leaves this server. */
+export async function getAuthorizedViewerSessionHash(link: ReportLink) {
   const token = (await cookies()).get(VIEWER_COOKIE)?.value;
-  if (!token) return false;
-  const session = getViewerSession(hashToken(token));
-  return session?.report_link_id === link.id;
+  if (!token) return null;
+  const tokenHash = hashToken(token);
+  const session = getViewerSession(tokenHash);
+  return session?.report_link_id === link.id ? tokenHash : null;
 }

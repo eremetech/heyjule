@@ -41,6 +41,7 @@ export function createHeyJuleApi(getAccessToken: AccessTokenProvider) {
 
   return {
     getSession: () => request<{ subject: string; role: "patient" | "doctor" | "service" }>("/v1/session"),
+    getVoiceToken: () => request<{ token: string; expiresAt: number }>("/v1/voice/token", { method: "POST" }),
     registerDevice: (device: DeviceRegistration) =>
       request<{ deviceId: string; fingerprint: string }>("/v1/devices", {
         method: "PUT",

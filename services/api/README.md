@@ -17,6 +17,8 @@ ChatGPT MCP handoff, consented doctor access, and end-to-end encrypted exports.
 - Patient-created, doctor-public-key encrypted report exports. The server stores
   and returns ciphertext but has no doctor private key.
 - Metadata-only audit events and automatic expiry cleanup.
+- Authenticated, five-minute xAI Voice API client-token minting without exposing
+  the permanent provider key to the patient app.
 
 The security boundary and remaining production work are documented in
 [`../../docs/backend-security.md`](../../docs/backend-security.md). Mobile
@@ -47,6 +49,7 @@ audience binding, and discovery metadata.
 | `DELETE` | `/v1/inbox/:id?device_id=…` | patient / `entry:claim` | Acknowledge durable device storage and delete the server copy |
 | `PUT` | `/v1/patient/entries/:id` | patient / `patient:data:write` | Idempotently store an encrypted-at-rest timeline item |
 | `GET` | `/v1/patient/entries` | patient / `patient:data:read` | Read the patient's own timeline |
+| `POST` | `/v1/voice/token` | patient / `patient:data:write` | Mint a short-lived xAI Voice API client token |
 | `GET` | `/v1/doctor/patients/:id/entries` | doctor / `report:data:read` | Read a linked patient's server-readable timeline |
 | `POST` | `/v1/doctor/keys` | doctor / `doctor:key:write` | Register a doctor-held export decryption public key |
 | `GET` | `/v1/patient/doctors/:id/key` | patient / `report:write` | Resolve the active linked doctor's public key |

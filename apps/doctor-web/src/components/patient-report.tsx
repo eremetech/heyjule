@@ -10,6 +10,7 @@ import {
   type WearableDay,
 } from "@/lib/db";
 import { computeFlags } from "@/lib/insights";
+import { ReportChatBar, type ReportChatSuggestion } from "./report-chat-bar";
 import { Sparkline } from "./sparkline";
 
 const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
@@ -155,6 +156,12 @@ export function PatientReport({ link }: { link: ReportLink }) {
   const promHref = (instrument: string, item: string) =>
     `/r/${link.token}/prom/${encodeURIComponent(`${instrument}~${item}`)}`;
   const wearablesHref = `/r/${link.token}/wearables`;
+  const chatSuggestions: ReportChatSuggestion[] = [
+    "What changed most?",
+    ...(flags.length > 0 ? ["Any noteworthy signals?"] : []),
+    ...(treatments.length > 0 ? ["How did treatments compare?"] : []),
+    ...(avgSleep != null ? ["Could sleep relate to symptoms?"] : []),
+  ];
 
   return (
     <>
@@ -168,7 +175,7 @@ export function PatientReport({ link }: { link: ReportLink }) {
         </span>
       </header>
 
-      <main className="page">
+      <main className="page report-page">
         <header className="patient-header">
           <h1>{patient.name}</h1>
           <p className="meta">
@@ -412,6 +419,11 @@ export function PatientReport({ link }: { link: ReportLink }) {
           )}
         </section>
       </main>
+      <ReportChatBar
+        patientName={patient.name}
+        reportToken={link.token}
+        suggestions={chatSuggestions}
+      />
     </>
   );
 }

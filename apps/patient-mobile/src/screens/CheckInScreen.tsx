@@ -1,13 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  useAudioRecorder,
-  useAudioRecorderState,
-} from "expo-audio";
 import * as Haptics from "expo-haptics";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -23,6 +16,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AnimatedOrb } from "../components/AnimatedOrb";
 import { SoftPressable } from "../components/SoftPressable";
 import { Waveform } from "../components/Waveform";
+import { useAuth } from "../auth/AuthProvider";
+import {
+  createConversationClient,
+  type ConversationEvent,
+  type ConversationSession,
+} from "../lib/conversation-client";
+import { createHeyJuleApi } from "../lib/heyjule-api";
 import { useHealthStore } from "../store/HealthStore";
 import { colors, shadows, typography } from "../theme";
 import type { SymptomKind } from "../types";
@@ -34,6 +34,7 @@ type CheckInScreenProps = {
 
 type Stage = "capture" | "review" | "saved";
 type CaptureMode = "voice" | "text";
+type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "error";
 
 type Message = {
   id: string;
@@ -42,24 +43,25 @@ type Message = {
 };
 
 const symptoms: SymptomKind[] = ["Headache", "Fatigue", "Nausea", "Pain", "Dizziness", "Other"];
-const recordingOptions = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
-
 function formatDuration(milliseconds: number) {
   const seconds = Math.floor(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function normalizeMetering(metering?: number) {
-  if (metering === undefined) return 0.08;
-  return Math.max(0.04, Math.min(1, (metering + 52) / 52));
-}
-
 export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   const insets = useSafeAreaInsets();
   const { addLog } = useHealthStore();
-  const recorder = useAudioRecorder(recordingOptions);
-  const recorderState = useAudioRecorderState(recorder, 60);
+  const auth = useAuth();
+  const api = useMemo(() => createHeyJuleApi(auth.getAccessToken), [auth.getAccessToken]);
+  const conversationClient = useMemo(
+    () => createConversationClient(api.getVoiceToken),
+    [api],
+  );
+  const sessionRef = useRef<ConversationSession | null>(null);
+  const sessionAbortRef = useRef<AbortController | null>(null);
+  const startedAtRef = useRef<number | null>(null);
+  const userTranscriptRef = useRef<string[]>([]);
   const [stage, setStage] = useState<Stage>("capture");
   const [captureMode, setCaptureMode] = useState<CaptureMode>("voice");
   const [messages, setMessages] = useState<Message[]>([
@@ -73,32 +75,111 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   const [voiceWasUsed, setVoiceWasUsed] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [recordingSaved, setRecordingSaved] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [voiceLevel, setVoiceLevel] = useState(0.08);
+  const [voiceDuration, setVoiceDuration] = useState(0);
 
-  const level = normalizeMetering(recorderState.metering);
   const userMessages = useMemo(() => messages.filter((message) => message.from === "user"), [messages]);
+  const voiceActive = voiceState === "connecting" || voiceState === "listening" || voiceState === "speaking";
+
+  useEffect(() => {
+    if (!voiceActive || startedAtRef.current === null) return;
+    const updateDuration = () => {
+      if (startedAtRef.current !== null) setVoiceDuration(Date.now() - startedAtRef.current);
+    };
+    updateDuration();
+    const interval = setInterval(updateDuration, 250);
+    return () => clearInterval(interval);
+  }, [voiceActive]);
+
+  useEffect(() => () => {
+    sessionAbortRef.current?.abort();
+    void sessionRef.current?.end();
+    sessionRef.current = null;
+  }, []);
+
+  function handleConversationEvent(event: ConversationEvent) {
+    switch (event.type) {
+      case "user_transcript":
+        userTranscriptRef.current.push(event.text);
+        setMessages((current) => [
+          ...current,
+          { id: `user_${Date.now()}`, from: "user", text: event.text },
+        ]);
+        break;
+      case "agent_text":
+        setMessages((current) => [
+          ...current,
+          { id: `jule_${Date.now()}`, from: "jule", text: event.text },
+        ]);
+        break;
+      case "audio_level":
+        setVoiceLevel(Math.max(0.04, event.value));
+        break;
+      case "status":
+        setVoiceState(event.value);
+        break;
+      case "error":
+        setVoiceState("error");
+        Alert.alert("Voice check-in paused", event.message);
+        break;
+      case "ended":
+        sessionRef.current = null;
+        setVoiceState((current) => current === "error" ? current : "idle");
+        setVoiceLevel(0.08);
+        break;
+    }
+  }
 
   async function startRecording() {
-    const permission = await requestRecordingPermissionsAsync();
-    if (!permission.granted) {
-      setPermissionDenied(true);
-      Alert.alert(
-        "Microphone access is off",
-        "You can still write your check-in, or allow microphone access in Settings.",
-      );
-      return;
-    }
+    if (voiceActive) return;
+    setVoiceState("connecting");
     setPermissionDenied(false);
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    await recorder.prepareToRecordAsync();
-    recorder.record({ forDuration: 600 });
-    setVoiceWasUsed(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    startedAtRef.current = Date.now();
+    setVoiceDuration(0);
+    const controller = new AbortController();
+    sessionAbortRef.current = controller;
+    try {
+      const session = await conversationClient.start(handleConversationEvent, controller.signal);
+      if (controller.signal.aborted) {
+        await session.end();
+        return;
+      }
+      sessionRef.current = session;
+      setVoiceWasUsed(true);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (error) {
+      if (controller.signal.aborted) {
+        setVoiceState("idle");
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Voice check-in is unavailable.";
+      const denied = /permission/iu.test(message);
+      startedAtRef.current = null;
+      setPermissionDenied(denied);
+      sessionAbortRef.current = null;
+      setVoiceState("error");
+      Alert.alert(
+        denied ? "Microphone access is off" : "Voice check-in unavailable",
+        denied
+          ? "You can still write your check-in, or allow microphone access in Settings."
+          : "Please check your connection and try again. You can still write your check-in.",
+      );
+    }
   }
 
   async function stopRecording() {
-    if (!recorderState.isRecording) return;
-    await recorder.stop();
-    await setAudioModeAsync({ allowsRecording: false });
+    const session = sessionRef.current;
+    sessionAbortRef.current?.abort();
+    sessionAbortRef.current = null;
+    sessionRef.current = null;
+    startedAtRef.current = null;
+    if (!session) {
+      setVoiceState("idle");
+      return;
+    }
+    await session.end();
+    setVoiceState("idle");
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setRecordingSaved(true);
     setTimeout(() => setRecordingSaved(false), 2000);
@@ -111,7 +192,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
 
   async function openReview() {
     await stopRecording();
-    const transcript = userMessages.map((message) => message.text).join(" ");
+    const transcript = userTranscriptRef.current.join(" ");
     setReviewNote(transcript);
     setStage("review");
   }
@@ -119,6 +200,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   function sendMessage() {
     const text = draft.trim();
     if (!text) return;
+    userTranscriptRef.current.push(text);
     const nextUserCount = userMessages.length + 1;
     const followUp =
       nextUserCount === 1
@@ -147,7 +229,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
       severity,
       treatment: treatment.trim() || undefined,
       source: voiceWasUsed ? "voice" : "text",
-      voiceDuration: voiceWasUsed ? Math.round(recorderState.durationMillis / 1000) : undefined,
+      voiceDuration: voiceWasUsed ? Math.round(voiceDuration / 1000) : undefined,
     });
     setStage("saved");
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -266,7 +348,14 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
           <Ionicons name="sparkles" size={15} color={colors.coral} />
           <Text style={styles.headerLabel}>AI check-in</Text>
         </View>
-        <SoftPressable onPress={() => Alert.alert("Check-in options", "Your audio stays private and can be deleted with the check-in.")} style={styles.roundButton} accessibilityLabel="More options">
+        <SoftPressable
+          onPress={() => Alert.alert(
+            "How voice mode works",
+            "While voice mode is active, audio is streamed to xAI for live responses. HeyJule saves only the transcript you review and approve.",
+          )}
+          style={styles.roundButton}
+          accessibilityLabel="More options"
+        >
           <Ionicons name="ellipsis-horizontal" size={22} color={colors.ink} />
         </SoftPressable>
       </View>
@@ -274,39 +363,55 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
       {captureMode === "voice" ? (
         <View style={styles.voiceBody}>
           <View style={styles.voicePrompt}>
-            <Text style={styles.voiceTitle}>{recorderState.isRecording ? "Tell me what changed." : "Ready when you are."}</Text>
+            <Text style={styles.voiceTitle}>
+              {voiceState === "speaking" ? "Jule is here with you." : voiceActive ? "Tell me what changed." : "Ready when you are."}
+            </Text>
             <Text style={styles.voiceSubtitle}>
               {permissionDenied
                 ? "Microphone is off — you can write instead."
-                : recorderState.isRecording
-                  ? "I’m listening."
+                : voiceState === "connecting"
+                  ? "Connecting securely…"
+                  : voiceState === "speaking"
+                    ? "You can interrupt at any time."
+                    : voiceState === "listening"
+                      ? "I’m listening."
+                      : voiceState === "error"
+                        ? "Tap the microphone to try again."
                   : voiceWasUsed
-                    ? "Your voice note is ready."
+                    ? "Your conversation is ready to review."
                     : "Tap the microphone to begin."}
             </Text>
           </View>
 
           <View style={styles.voiceOrb}>
-            <AnimatedOrb size={278} mode={recorderState.isRecording ? "listening" : "thinking"} level={recorderState.isRecording ? level : 0.08} />
+            <AnimatedOrb
+              size={278}
+              mode={voiceState === "listening" ? "listening" : "thinking"}
+              level={voiceState === "listening" ? voiceLevel : voiceState === "speaking" ? 0.32 : 0.08}
+            />
           </View>
 
-          <Waveform level={level} active={recorderState.isRecording} />
-          <Text style={styles.timer}>{formatDuration(recorderState.durationMillis)}</Text>
+          <Waveform level={voiceLevel} active={voiceActive} />
+          <Text style={styles.timer}>{formatDuration(voiceDuration)}</Text>
 
           <View style={styles.voiceControls}>
             <SoftPressable
-              onPress={() => setCaptureMode("text")}
+              onPress={() => {
+                void stopRecording();
+                setCaptureMode("text");
+              }}
               style={styles.secondaryCircle}
               accessibilityLabel="Write instead"
             >
               <Ionicons name="keypad-outline" size={22} color={colors.inkSoft} />
             </SoftPressable>
             <SoftPressable
-              onPress={recorderState.isRecording ? stopRecording : startRecording}
-              style={[styles.micButton, recorderState.isRecording && styles.micButtonActive]}
-              accessibilityLabel={recorderState.isRecording ? "Pause recording" : "Start recording"}
+              onPress={voiceActive ? stopRecording : startRecording}
+              style={[styles.micButton, voiceActive && styles.micButtonActive]}
+              accessibilityLabel={voiceActive ? "Stop voice conversation" : "Start voice conversation"}
+              disabled={voiceState === "connecting"}
             >
-              <Ionicons name={recorderState.isRecording ? "pause" : "mic"} size={30} color={colors.white} />
+              <Ionicons name={voiceActive ? "stop" : "mic"} size={30} color={colors.white} />
             </SoftPressable>
             <SoftPressable onPress={openReview} style={styles.endButton} accessibilityLabel="End and review check-in">
               <Text style={styles.endText}>End</Text>
@@ -358,7 +463,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
 
       <View style={styles.privacyRow}>
         <Ionicons name="lock-closed-outline" size={13} color={colors.inkFaint} />
-        <Text style={styles.privacyText}>Private, secure, and never shared without you.</Text>
+        <Text style={styles.privacyText}>Nothing is saved until you review it.</Text>
       </View>
     </KeyboardAvoidingView>
   );

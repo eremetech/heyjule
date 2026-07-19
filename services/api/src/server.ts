@@ -44,6 +44,7 @@ type AppOptions = {
   config: ApiConfig;
   database?: ApiDatabase;
   authenticate?: Authenticate;
+  fetch?: typeof fetch;
 };
 
 function setSecurityHeaders(response: ServerResponse) {
@@ -165,6 +166,7 @@ export function createApiServer(options: AppOptions) {
       devTokens: config.devTokens,
     });
   const rateLimit = createRateLimiter(config.trustProxy);
+  const fetchFromProvider = options.fetch ?? fetch;
   const resourceMetadataUrl = `${config.apiUrl}/.well-known/oauth-protected-resource`;
 
   const server = createServer(async (request, response) => {
@@ -241,6 +243,53 @@ export function createApiServer(options: AppOptions) {
       if (url.pathname === "/v1/session" && request.method === "GET") {
         if (!principal) throw new HttpError(401, "authentication_required");
         return json(response, 200, { subject: principal.sub, role: principal.role });
+      }
+
+      if (url.pathname === "/v1/voice/token" && request.method === "POST") {
+        requireAccess(principal, "patient", "patient:data:write");
+        if (!config.xaiApiKey) throw new HttpError(503, "voice_not_configured");
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        let providerResponse: Response;
+        try {
+          providerResponse = await fetchFromProvider(
+            "https://api.x.ai/v1/realtime/client_secrets",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${config.xaiApiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ expires_after: { seconds: 300 } }),
+              signal: controller.signal,
+            },
+          );
+        } catch {
+          throw new HttpError(502, "voice_provider_unavailable");
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!providerResponse.ok) throw new HttpError(502, "voice_provider_rejected");
+        let providerBody: {
+          value?: unknown;
+          expires_at?: unknown;
+          client_secret?: { value?: unknown; expires_at?: unknown };
+        };
+        try {
+          providerBody = (await providerResponse.json()) as typeof providerBody;
+        } catch {
+          throw new HttpError(502, "voice_provider_invalid_response");
+        }
+        const token = providerBody.value ?? providerBody.client_secret?.value;
+        const expiresAt = providerBody.expires_at ?? providerBody.client_secret?.expires_at;
+        if (typeof token !== "string" || !token) {
+          throw new HttpError(502, "voice_provider_invalid_response");
+        }
+        return json(response, 200, {
+          token,
+          expiresAt: typeof expiresAt === "number" ? expiresAt : Math.floor(Date.now() / 1000) + 300,
+        });
       }
 
       if (url.pathname === "/v1/devices" && request.method === "PUT") {
@@ -406,8 +455,8 @@ export function createApiServer(options: AppOptions) {
 async function main() {
   const config = loadConfig();
   const { server } = createApiServer({ config });
-  server.listen(config.port, "127.0.0.1", () => {
-    console.log(`HeyJule API listening on http://127.0.0.1:${config.port}`);
+  server.listen(config.port, "0.0.0.0", () => {
+    console.log(`HeyJule API listening on http://0.0.0.0:${config.port}`);
   });
 }
 

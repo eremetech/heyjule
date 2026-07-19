@@ -24,9 +24,9 @@
     },
     "plugins": [
       [
-        "expo-audio",
+        "react-native-audio-api",
         {
-          "microphonePermission": "Allow heyjule to listen while you record a health check-in."
+          "iosMicrophonePermission": "Allow heyjule to listen while you have a voice check-in."
         }
       ],
       [
@@ -36,7 +36,8 @@
           "faceIDPermission": "Allow heyjule to protect your private health journal."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/with-path-safe-ios-build"
     ]
   }
 }

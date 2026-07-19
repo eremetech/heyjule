@@ -53,7 +53,12 @@ export default async function ReportPage({
 
   return (
     <main className="auth-shell">
-      <QrSignIn channel={channel} qrDataUrl={qrDataUrl} patientName={patient.name} />
+      <QrSignIn
+        channel={channel}
+        qrDataUrl={qrDataUrl}
+        patientName={patient.name}
+        mockApproveUrl={process.env.NODE_ENV === "development" ? approveUrl : undefined}
+      />
     </main>
   );
 }
