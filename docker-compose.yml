@@ -101,6 +101,29 @@ services:
       - ALL
     stop_grace_period: 20s
 
+  website:
+    build:
+      context: design/landing
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 20s
+
   chat-state:
     image: redis:7.4-alpine
     restart: unless-stopped
