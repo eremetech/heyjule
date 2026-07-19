@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 260" fill="none" font-family="Inter, sans-serif">
+  <defs>
+    <linearGradient id="purple" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b6dff"/><stop offset="1" stop-color="#6b4bf0"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3f7bf5"/><stop offset="1" stop-color="#1f4fc4"/>
+    </linearGradient>
+    <linearGradient id="hub" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#2f6fed"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0b2545" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .hub-float { animation: floaty 3.4s ease-in-out infinite; }
+      @keyframes floaty {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-7px); }
+      }
+      .flow { animation: dash 1.1s linear infinite; }
+      @keyframes dash { to { stroke-dashoffset: -10; } }
+      .pulse { animation: pulse 2.4s ease-in-out infinite; }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      @media (prefers-reduced-motion: reduce) {
+        .hub-float, .flow, .pulse { animation: none; }
+      }
+    </style>
+  </defs>
+
+  <!-- flow lines patient -> hub -> clinician -->
+  <path class="flow" d="M300 130 C 400 130, 430 130, 500 130" stroke="#c9b8ff" stroke-width="2.5" stroke-dasharray="2 8" stroke-linecap="round"/>
+  <path class="flow" d="M660 130 C 730 130, 760 130, 860 130" stroke="#b9ccff" stroke-width="2.5" stroke-dasharray="2 8" stroke-linecap="round"/>
+  <circle class="pulse" cx="400" cy="130" r="4" fill="#7c5cff"/>
+  <circle class="pulse" cx="760" cy="130" r="4" fill="#2f6fed"/>
+
+  <!-- ===== PATIENT (left) ===== -->
+  <g filter="url(#soft)">
+    <rect x="40" y="46" width="230" height="168" rx="20" fill="#ffffff" stroke="#e6ebf2"/>
+  </g>
+  <!-- avatar -->
+  <circle cx="92" cy="92" r="24" fill="url(#purple)"/>
+  <circle cx="92" cy="85" r="8" fill="#ffffff"/>
+  <path d="M78 104 c 0 -10 28 -10 28 0 Z" fill="#ffffff"/>
+  <text x="128" y="86" font-size="15" font-weight="700" fill="#0b2545">Patient</text>
+  <text x="128" y="104" font-size="11.5" fill="#5b6b7c">Monika, 53</text>
+  <!-- phone with app -->
+  <rect x="66" y="128" width="52" height="70" rx="9" fill="#f2eefe" stroke="#ddd0fb"/>
+  <circle cx="92" cy="150" r="11" fill="none" stroke="#7c5cff" stroke-width="3"/>
+  <path d="M74 176 l6 -8 5 6 6 -12 6 10 5 -5" fill="none" stroke="#7c5cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- data chips -->
+  <g>
+    <rect x="132" y="126" width="120" height="22" rx="11" fill="#f3f6fb"/>
+    <circle cx="145" cy="137" r="4" fill="#7c5cff"/><text x="156" y="141" font-size="10.5" fill="#3a4757">Wearables</text>
+    <rect x="132" y="154" width="120" height="22" rx="11" fill="#f3f6fb"/>
+    <circle cx="145" cy="165" r="4" fill="#14b8a6"/><text x="156" y="169" font-size="10.5" fill="#3a4757">Symptom log</text>
+    <rect x="132" y="182" width="120" height="22" rx="11" fill="#f3f6fb"/>
+    <circle cx="145" cy="193" r="4" fill="#2f6fed"/><text x="156" y="197" font-size="10.5" fill="#3a4757">Sleep &amp; cycle</text>
+  </g>
+
+  <!-- ===== HUB (center) ===== -->
+  <g class="hub-float">
+    <g filter="url(#soft)">
+      <circle cx="580" cy="130" r="52" fill="url(#hub)"/>
+    </g>
+    <path d="M556 133 c 8 0 8 -14 16 -14 s 8 14 16 14 8 -14 16 -14" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <!-- little orbiting source dots -->
+    <circle cx="580" cy="66" r="5" fill="#14b8a6"/>
+    <circle cx="524" cy="96" r="5" fill="#7c5cff"/>
+    <circle cx="636" cy="96" r="5" fill="#2f6fed"/>
+    <path d="M580 78 L580 71" stroke="#cfe6e2" stroke-width="2"/>
+    <path d="M540 108 L529 100" stroke="#e0d6fb" stroke-width="2"/>
+    <path d="M620 108 L631 100" stroke="#cddcfb" stroke-width="2"/>
+  </g>
+  <text x="580" y="210" font-size="13" font-weight="700" fill="#0b2545" text-anchor="middle">HeyJule</text>
+  <text x="580" y="228" font-size="10.5" fill="#5b6b7c" text-anchor="middle">AI agents · one timeline</text>
+
+  <!-- ===== CLINICIAN (right) ===== -->
+  <g filter="url(#soft)">
+    <rect x="890" y="46" width="230" height="168" rx="20" fill="#ffffff" stroke="#e6ebf2"/>
+  </g>
+  <!-- avatar -->
+  <circle cx="942" cy="92" r="24" fill="url(#blue)"/>
+  <circle cx="942" cy="85" r="8" fill="#ffffff"/>
+  <path d="M928 104 c 0 -10 28 -10 28 0 Z" fill="#ffffff"/>
+  <circle cx="936" cy="103" r="2.4" fill="#2f6fed"/><circle cx="948" cy="103" r="2.4" fill="#2f6fed"/>
+  <text x="978" y="86" font-size="15" font-weight="700" fill="#0b2545">Clinician</text>
+  <text x="978" y="104" font-size="11.5" fill="#5b6b7c">2-min dashboard</text>
+  <!-- dashboard preview -->
+  <rect x="916" y="128" width="178" height="70" rx="9" fill="#f3f7ff" stroke="#d5e2fb"/>
+  <!-- mini chart -->
+  <polyline points="928,182 946,168 962,174 980,150 998,158 1016,140" fill="none" stroke="#2f6fed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1016" cy="140" r="3.4" fill="#2f6fed"/>
+  <!-- finding lines -->
+  <rect x="1036" y="138" width="46" height="6" rx="3" fill="#cdddfb"/>
+  <rect x="1036" y="150" width="40" height="6" rx="3" fill="#dbe6fb"/>
+  <rect x="1036" y="162" width="46" height="6" rx="3" fill="#cdddfb"/>
+  <rect x="1036" y="174" width="34" height="6" rx="3" fill="#dbe6fb"/>
+</svg>
