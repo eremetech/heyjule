@@ -617,18 +617,166 @@ label {
 .report-section { margin-top: 2.5rem; }
 .report-section > h2 { margin-bottom: 1rem; }
 
-.finding-list { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
-.finding {
+/* ---------- menopause dashboard report ---------- */
+
+.dashboard-report { --panel-gap: 0.9rem; }
+.panel {
   border: 1px solid var(--line);
-  border-left: 3px solid var(--status-mild);
-  border-radius: var(--radius);
+  border-radius: calc(var(--radius) + 2px);
   background: var(--surface);
-  padding: 1rem 1.125rem;
+  padding: 1.1rem 1.25rem;
 }
-.finding-attention { border-left-color: var(--status-moderate); }
-.finding-urgent { border-left-color: var(--status-severe); }
-.finding-heading span { color: var(--ink-3); font-size: 0.75rem; text-transform: uppercase; }
-.finding p, .trend-card p, .report-sections p { margin-top: 0.5rem; color: var(--ink-2); font-size: 0.9rem; line-height: 1.55; }
+.panel > h3 { font-size: 0.9375rem; margin-bottom: 0.75rem; }
+
+.dash-head {
+  display: grid;
+  grid-template-columns: minmax(15rem, 1.1fr) minmax(0, 2fr) auto;
+  gap: 1.5rem;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface);
+  padding: 1.25rem 1.5rem;
+}
+.dash-identity { display: flex; gap: 0.9rem; align-items: center; }
+.dash-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.dash-identity h1 { font-size: 1.375rem; }
+.dash-identity p { margin-top: 0.15rem; color: var(--ink-2); font-size: 0.8438rem; }
+.dash-id { color: var(--ink-3) !important; font-size: 0.75rem !important; }
+.dash-facts { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem 1.75rem; align-self: center; }
+.dash-facts li { display: flex; flex-direction: column; gap: 0.1rem; }
+.dash-facts span { color: var(--ink-3); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.dash-facts strong { font-size: 0.8438rem; }
+.dash-context { text-align: right; color: var(--ink-2); font-size: 0.8125rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.dash-generated { color: var(--ink-3); font-size: 0.75rem; }
+
+.dash-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(15rem, 1fr);
+  gap: var(--panel-gap);
+  margin-top: var(--panel-gap);
+}
+.assessment-lede { font-weight: 650; line-height: 1.5; }
+.assessment-findings { list-style: none; margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.assessment-findings li { display: flex; gap: 0.7rem; align-items: baseline; font-size: 0.875rem; color: var(--ink-2); line-height: 1.5; }
+.finding-level {
+  flex: 0 0 4.6rem;
+  font-size: 0.6563rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.level-notable { color: var(--status-good); }
+.level-attention { color: var(--status-moderate); }
+.level-urgent { color: var(--status-severe); }
+
+.quiet-details { margin-top: 0.8rem; }
+.quiet-details summary { cursor: pointer; color: var(--accent); font-size: 0.8125rem; width: fit-content; }
+.quiet-details[open] summary { margin-bottom: 0.6rem; }
+.quiet-details p { margin-top: 0.5rem; color: var(--ink-2); font-size: 0.875rem; line-height: 1.6; }
+.section-key { text-transform: capitalize; }
+
+.mrs-card {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: calc(var(--radius) + 2px);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.mrs-title { font-weight: 650; color: var(--accent-ink); font-size: 0.9375rem; }
+.mrs-title small { color: var(--ink-3); font-weight: 400; }
+.mrs-numbers { display: flex; align-items: baseline; gap: 1rem; }
+.mrs-current { font-size: 2.4rem; font-weight: 750; line-height: 1; }
+.mrs-current small { font-size: 1rem; font-weight: 500; color: var(--ink-3); }
+.mrs-change { font-size: 1.05rem; font-weight: 700; }
+.change-good { color: var(--status-good); }
+.change-bad { color: var(--status-severe); }
+.mrs-baseline { color: var(--ink-3); font-size: 0.75rem; }
+.mrs-card svg { width: 100%; height: 2.25rem; margin-top: 0.35rem; }
+
+.report-block { margin-top: 1.6rem; }
+.report-block > h2 { font-size: 1.0625rem; margin-bottom: 0.9rem; }
+.block-tag { margin-left: 0.5rem; color: var(--ink-3); font-size: 0.7188rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.domain-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr)); gap: var(--panel-gap); }
+.domain-card {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--surface);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.domain-card h3 { font-size: 0.875rem; }
+.domain-items { list-style: none; display: flex; flex-direction: column; gap: 0.2rem; min-height: 3.4rem; }
+.domain-items li { color: var(--ink-2); font-size: 0.75rem; line-height: 1.45; padding-left: 0.7rem; position: relative; }
+.domain-items li::before { content: "·"; position: absolute; left: 0; }
+.domain-blocks { display: flex; gap: 0.3rem; }
+.block { width: 1.5rem; height: 0.65rem; border-radius: 2px; background: var(--line); }
+.domain-vasomotor .block-on { background: #c4322f; }
+.domain-sleep .block-on { background: #27356b; }
+.domain-psycho .block-on { background: #7b3fb0f0; }
+.domain-urogenital .block-on { background: #1273a8; }
+.domain-musculo .block-on { background: #e07c1f; }
+.domain-verdict { font-size: 0.8125rem; font-weight: 700; }
+.verdict-good { color: var(--status-good); }
+.verdict-partial { color: var(--status-moderate); }
+.verdict-flat { color: var(--ink-3); }
+.verdict-bad { color: var(--status-severe); }
+.domain-baseline { color: var(--ink-3); font-size: 0.7188rem; }
+.domain-empty { align-items: flex-start; justify-content: center; }
+.domain-missing { color: var(--ink-3); font-size: 0.875rem; margin: auto 0; }
+
+.dash-bottom {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr) minmax(13rem, 1fr);
+  gap: var(--panel-gap);
+  margin-top: 1.6rem;
+  align-items: start;
+}
+.therapy-current { display: flex; flex-direction: column; gap: 0.2rem; padding-bottom: 0.75rem; }
+.therapy-current span { color: var(--ink-3); font-size: 0.75rem; }
+.therapy-current p, .therapy-note { color: var(--ink-2); font-size: 0.8438rem; line-height: 1.55; margin-top: 0.3rem; }
+.therapy-note { border-top: 1px solid var(--line); padding-top: 0.7rem; }
+.therapy-past { margin-top: 0.7rem; font-size: 0.8125rem; }
+.therapy-past span { display: block; color: var(--ink-3); font-size: 0.7188rem; margin-top: 0.1rem; }
+.therapy-past p { font-size: 0.7813rem !important; }
+
+.wearable-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
+.wearable-card { display: flex; flex-direction: column; gap: 0.25rem; border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem 0.85rem; }
+.stat-label { color: var(--ink-1, inherit); font-size: 0.7813rem; font-weight: 650; }
+.stat-sub { color: var(--ink-3); font-size: 0.6875rem; }
+.stat-value { font-size: 1.25rem; font-weight: 700; margin-top: 0.15rem; }
+.stat-delta { font-size: 0.6875rem; line-height: 1.4; }
+.delta-ok { color: var(--status-good); }
+.delta-warn { color: var(--status-moderate); }
+.wearable-card svg { width: 100%; height: 1.6rem; margin-top: 0.3rem; }
+
+.discuss-list { list-style: none; display: flex; flex-direction: column; gap: 0.65rem; }
+.discuss-list li { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.8438rem; color: var(--ink-2); line-height: 1.45; }
+.discuss-box { flex: 0 0 0.85rem; height: 0.85rem; border: 1.5px solid var(--ink-3); border-radius: 3px; transform: translateY(0.1rem); }
+
+.dash-footer { margin-top: 1.75rem; border-top: 1px solid var(--line); padding-top: 0.9rem; }
+.dash-footer p { color: var(--ink-3); font-size: 0.75rem; line-height: 1.5; }
+.dash-footer p + p { margin-top: 0.35rem; }
+
+@media (max-width: 64rem) {
+  .dash-head { grid-template-columns: 1fr; }
+  .dash-context { text-align: left; }
+  .dash-overview, .dash-bottom { grid-template-columns: 1fr; }
+}
 
 .evidence-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
 .evidence-list code, .report-provenance code {

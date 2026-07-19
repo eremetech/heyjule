@@ -491,6 +491,8 @@ test("mock patient data is reviewed by OpenAI, encrypted by the patient, and ren
         evidenceEntryIds: ["mock_conversation_1"],
       },
     ],
+    keyFacts: [{ label: "Menopause stage", value: "Perimenopause" }],
+    discussionPoints: ["Review the recent resting-heart-rate rise."],
   };
   const app = createApiServer({
     config,

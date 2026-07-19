@@ -82,6 +82,7 @@ export const auth = betterAuth({
           const role = (user as { role?: string }).role === "patient" ? "patient" : "doctor";
           return {
             email: user.email,
+            name: user.name,
             role,
             scope: role === "patient" ? patientScopes : doctorScopes,
           };

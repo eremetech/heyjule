@@ -10,37 +10,46 @@ import type {
 } from "@heyjule/shared-types";
 
 const generatedReportSchema = z.object({
-  headline: z.string().min(1).max(240),
-  summary: z.string().min(1).max(4_000),
+  headline: z.string().min(1).max(160),
+  summary: z.string().min(1).max(700),
   findings: z.array(
     z.object({
-      title: z.string().min(1).max(200),
-      detail: z.string().min(1).max(1_500),
+      title: z.string().min(1).max(90),
+      detail: z.string().min(1).max(220),
       level: z.enum(["notable", "attention", "urgent"]),
       evidenceEntryIds: z.array(z.string()).max(30),
     }),
-  ).max(20),
+  ).max(6),
   trends: z.array(
     z.object({
-      metric: z.string().min(1).max(160),
+      metric: z.string().min(1).max(80),
       direction: z.enum(["improving", "stable", "worsening", "mixed"]),
-      detail: z.string().min(1).max(1_500),
+      detail: z.string().min(1).max(220),
       evidenceEntryIds: z.array(z.string()).max(60),
     }),
-  ).max(20),
+  ).max(8),
   sections: z.array(
     z.object({
       key: z.enum(["symptoms", "wearables", "proms", "treatments", "conversations"]),
-      summary: z.string().min(1).max(2_000),
+      summary: z.string().min(1).max(450),
       evidenceEntryIds: z.array(z.string()).max(80),
     }),
   ).max(5),
+  keyFacts: z.array(
+    z.object({
+      label: z.string().min(1).max(40),
+      value: z.string().min(1).max(60),
+    }),
+  ).max(5),
+  discussionPoints: z.array(z.string().min(1).max(90)).max(5),
 });
 
 type GenerateReportOptions = {
   apiKey: string;
   model: string;
   patient: PatientProfile;
+  patientId?: string;
+  recipient?: { doctorId: string; doctorName?: string };
   entries: PatientEntry[];
   timeframeDays: number;
   scope: ClinicalReportScope;
@@ -140,6 +149,13 @@ export async function generateClinicalReport(options: GenerateReportOptions): Pr
         role: "developer",
         content: [
           "Create a concise clinician-facing draft from the supplied patient record JSON.",
+          "The reader sees the raw tables and charts next to your text, so never enumerate data — surface only what needs clinical attention.",
+          "Headline: one sentence naming the single clearest change, with its number.",
+          "Summary: at most three short sentences.",
+          "Each finding and trend detail: exactly one sentence with the key number (e.g. '71 bpm over the last 3 nights — 8 bpm above the 14-day baseline of 64 bpm.').",
+          "Each section summary: at most two short sentences.",
+          "keyFacts: up to five chart-header facts a clinician wants at a glance (e.g. menopause stage, relevant comorbidity like migraine, current hormone therapy and how long ago it started). Only facts present in the entries.",
+          "discussionPoints: up to five short imperative talking points for the next visit (e.g. 'Clarify bleeding pattern under MHT'), grounded in the entries.",
           "Use only facts present in the supplied entries. Never diagnose, prescribe, or infer causality.",
           "Distinguish patient-reported observations from wearable measurements and imported treatment records.",
           "Cite the exact entry IDs supporting every finding, trend, and section.",
@@ -184,6 +200,11 @@ export async function generateClinicalReport(options: GenerateReportOptions): Pr
     })),
     sources: sourceCounts(entries),
     sourceEntryIds: entries.map((entry) => entry.id),
+    entries,
+    patientId: options.patientId,
+    recipient: options.recipient,
+    keyFacts: generated.keyFacts,
+    discussionPoints: generated.discussionPoints,
     generation: {
       provider: "openai",
       model: response.model,

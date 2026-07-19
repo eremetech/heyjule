@@ -7,6 +7,7 @@ export type Principal = {
   sub: string;
   role: Role;
   scopes: ReadonlySet<string>;
+  name?: string;
 };
 
 export type Authenticate = (authorizationHeader: string | undefined) => Promise<Principal | null>;
@@ -68,7 +69,12 @@ export function createAuthenticator(options: {
         const role = payload.heyjule_role ?? payload.role;
         if (role !== "patient" && role !== "doctor" && role !== "service") return null;
         const scopeClaim = typeof payload.scope === "string" ? payload.scope.split(/\s+/u) : [];
-        return { sub: payload.sub, role, scopes: new Set(scopeClaim.filter(Boolean)) };
+        return {
+          sub: payload.sub,
+          role,
+          scopes: new Set(scopeClaim.filter(Boolean)),
+          name: typeof payload.name === "string" && payload.name.trim() ? payload.name.trim() : undefined,
+        };
       } catch {
         // Try the next explicitly configured issuer. Never accept an unlisted issuer.
       }

@@ -155,6 +155,7 @@ export type CareInvite = {
 
 export type CareRelationship = {
   doctorId: string;
+  doctorName?: string;
   linkedAt: string;
 };
 
@@ -223,6 +224,18 @@ export type ClinicalReport = {
   sections: ClinicalReportSection[];
   sources: Array<{ source: PatientEntrySource; count: number }>;
   sourceEntryIds: string[];
+  /** The structured entries the report was generated from, so the viewer can
+   * render PROM tables, treatments and wearable summaries instead of prose.
+   * Absent in envelopes sealed before this field existed. */
+  entries?: PatientEntry[];
+  /** Stable identifier of the patient in the HeyJule API. */
+  patientId?: string;
+  /** Clinician this report was generated for. */
+  recipient?: { doctorId: string; doctorName?: string };
+  /** Short chart-header facts extracted from the record (e.g. menopause stage, migraine). */
+  keyFacts?: Array<{ label: string; value: string }>;
+  /** Suggested talking points for the next visit, one short line each. */
+  discussionPoints?: string[];
   generation: {
     provider: "openai";
     model: string;

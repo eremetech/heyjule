@@ -169,6 +169,7 @@ export class ApiDatabase {
       CREATE TABLE IF NOT EXISTS care_relationships (
         patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
         doctor_id TEXT NOT NULL,
+        doctor_name TEXT,
         status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
         created_at TEXT NOT NULL,
         revoked_at TEXT,
@@ -178,6 +179,7 @@ export class ApiDatabase {
       CREATE TABLE IF NOT EXISTS care_invites (
         id TEXT PRIMARY KEY,
         doctor_id TEXT NOT NULL,
+        doctor_name TEXT,
         code_hash TEXT NOT NULL UNIQUE,
         ciphertext TEXT NOT NULL,
         nonce TEXT NOT NULL,
@@ -217,6 +219,13 @@ export class ApiDatabase {
     // Earlier builds expired unopened device-sealed summaries after 15 minutes.
     // Rebuild that table once so pending ciphertext becomes a durable mailbox
     // and is removed only by an authenticated device acknowledgement.
+    for (const table of ["care_relationships", "care_invites"]) {
+      const columns = this.connection.pragma(`table_info(${table})`) as Array<{ name: string }>;
+      if (!columns.some((column) => column.name === "doctor_name")) {
+        this.connection.exec(`ALTER TABLE ${table} ADD COLUMN doctor_name TEXT;`);
+      }
+    }
+
     const inboxColumns = this.connection.pragma("table_info(inbox_entries)") as Array<{
       name: string;
     }>;
@@ -500,7 +509,14 @@ export class ApiDatabase {
 
   createCareInvite(
     doctorId: string,
-    value: { id: string; code: string; codeHash: string; createdAt: string; expiresAt: string },
+    value: {
+      id: string;
+      code: string;
+      codeHash: string;
+      createdAt: string;
+      expiresAt: string;
+      doctorName?: string;
+    },
   ) {
     const sealed = encryptAtRest(
       { code: value.code },
@@ -510,12 +526,13 @@ export class ApiDatabase {
     this.connection
       .prepare(
         `INSERT INTO care_invites
-          (id, doctor_id, code_hash, ciphertext, nonce, tag, status, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+          (id, doctor_id, doctor_name, code_hash, ciphertext, nonce, tag, status, created_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
       )
       .run(
         value.id,
         doctorId,
+        value.doctorName ?? null,
         value.codeHash,
         sealed.ciphertext,
         sealed.nonce,
@@ -572,8 +589,8 @@ export class ApiDatabase {
     const now = isoNow();
     return this.connection.transaction(() => {
       const invite = this.connection
-        .prepare<[string, string], { id: string; doctor_id: string }>(
-          `SELECT id, doctor_id FROM care_invites
+        .prepare<[string, string], { id: string; doctor_id: string; doctor_name: string | null }>(
+          `SELECT id, doctor_id, doctor_name FROM care_invites
             WHERE code_hash = ? AND status = 'pending' AND expires_at > ?`,
         )
         .get(codeHash, now);
@@ -589,28 +606,33 @@ export class ApiDatabase {
       this.connection
         .prepare(
           `INSERT INTO care_relationships
-            (patient_id, doctor_id, status, created_at, revoked_at)
-           VALUES (?, ?, 'active', ?, NULL)
+            (patient_id, doctor_id, doctor_name, status, created_at, revoked_at)
+           VALUES (?, ?, ?, 'active', ?, NULL)
            ON CONFLICT(patient_id, doctor_id) DO UPDATE SET
-             status = 'active', revoked_at = NULL`,
+             status = 'active', revoked_at = NULL,
+             doctor_name = COALESCE(excluded.doctor_name, care_relationships.doctor_name)`,
         )
-        .run(patientId, invite.doctor_id, now);
+        .run(patientId, invite.doctor_id, invite.doctor_name, now);
       this.audit(patientId, "care_relationship.activate", "doctor", invite.doctor_id, {
         inviteId: invite.id,
       });
-      return { doctorId: invite.doctor_id, linkedAt: now };
+      return { doctorId: invite.doctor_id, doctorName: invite.doctor_name ?? undefined, linkedAt: now };
     })();
   }
 
   listCareRelationships(patientId: string): CareRelationship[] {
     return this.connection
-      .prepare<[string], { doctor_id: string; created_at: string }>(
-        `SELECT doctor_id, created_at FROM care_relationships
+      .prepare<[string], { doctor_id: string; doctor_name: string | null; created_at: string }>(
+        `SELECT doctor_id, doctor_name, created_at FROM care_relationships
           WHERE patient_id = ? AND status = 'active'
           ORDER BY created_at DESC`,
       )
       .all(patientId)
-      .map((row) => ({ doctorId: row.doctor_id, linkedAt: row.created_at }));
+      .map((row) => ({
+        doctorId: row.doctor_id,
+        doctorName: row.doctor_name ?? undefined,
+        linkedAt: row.created_at,
+      }));
   }
 
   revokeCareRelationship(patientId: string, doctorId: string) {

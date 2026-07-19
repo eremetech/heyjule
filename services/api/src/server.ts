@@ -524,6 +524,13 @@ export function createApiServer(options: AppOptions) {
             apiKey: config.openaiApiKey,
             model: config.openaiModel,
             patient: profile,
+            patientId: patient.sub,
+            recipient: {
+              doctorId: body.doctorId,
+              doctorName: database
+                .listCareRelationships(patient.sub)
+                .find((link) => link.doctorId === body.doctorId)?.doctorName,
+            },
             entries,
             timeframeDays: body.timeframeDays,
             scope: body.scope,
@@ -576,6 +583,7 @@ export function createApiServer(options: AppOptions) {
         database.createCareInvite(doctor.sub, {
           ...invite,
           codeHash: careInviteHash(code, config.dataKey),
+          doctorName: doctor.name,
         });
         return json(response, 201, invite);
       }
