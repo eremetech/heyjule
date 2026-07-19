@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#25342e" />
+    <title>HeyJule — one shared health story</title>
+    <meta name="description" content="HeyJule turns fragmented health data into one shared health story." />
+    <link rel="preconnect" href="https://api.fontshare.com" />
+    <link href="https://api.fontshare.com/v2/css?f[]=tanker@400&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --paper: #fff8ef;
+        --ink: #13221d;
+        --moss: #25342e;
+        --moss-deep: #16231f;
+        --coral: #e95031;
+        --sun: #ffce4e;
+        --line: rgba(255, 248, 239, 0.55);
+        --display: "Tanker", "Arial Black", Impact, sans-serif;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html { min-width: 320px; background: var(--moss-deep); }
+      body { min-height: 100vh; margin: 0; color: var(--paper); font-family: var(--sans); }
+      a { color: inherit; }
+
+      .page {
+        position: relative;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100svh;
+        overflow: hidden;
+        isolation: isolate;
+        padding: clamp(1.1rem, 2.7vw, 2.3rem) clamp(1.1rem, 3vw, 3.8rem) 1.1rem;
+        background:
+          linear-gradient(90deg, rgba(15, 29, 25, 0.72), rgba(18, 31, 27, 0.38) 38%, rgba(15, 29, 25, 0.5)),
+          linear-gradient(0deg, rgba(13, 25, 22, 0.55), transparent 44%),
+          url("assets/creation-patient-clinician-reference.png") center / cover no-repeat,
+          var(--moss);
+      }
+      .page::before {
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        pointer-events: none;
+        content: "";
+        opacity: 0.18;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        mix-blend-mode: soft-light;
+      }
+      .page::after {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        pointer-events: none;
+        content: "";
+        background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 25% 25%;
+        opacity: 0.16;
+      }
+
+      .nav,
+      .footer { z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+      .brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; }
+      .brand-mark { width: 1.2rem; height: 1.2rem; border: 2px solid var(--paper); border-radius: 50% 50% 50% 0; transform: rotate(-42deg); }
+      .brand-name { font-size: 0.91rem; font-weight: 760; letter-spacing: -0.03em; }
+      .nav ul { display: flex; align-items: center; gap: clamp(0.9rem, 2.3vw, 2rem); margin: 0; padding: 0; list-style: none; }
+      .nav a { font-size: 0.78rem; font-weight: 650; text-decoration: none; }
+      .nav .nav-cta { padding: 0.63rem 0.95rem; border-radius: 99px; background: var(--paper); color: var(--ink); }
+
+      .hero { position: relative; z-index: 2; min-height: 0; }
+      .hero-copy {
+        position: absolute;
+        z-index: 4;
+        top: 50%;
+        left: 50%;
+        display: flex;
+        width: clamp(18rem, 26vw, 25rem);
+        min-height: clamp(24rem, 48vh, 34rem);
+        padding: clamp(1.35rem, 2vw, 2rem);
+        border: 1px solid rgba(255, 248, 239, 0.72);
+        background: rgba(25, 43, 37, 0.33);
+        box-shadow: 0 1.5rem 3.5rem rgba(4, 14, 11, 0.18), inset 0 0 3rem rgba(255, 248, 239, 0.06);
+        backdrop-filter: blur(5px);
+        flex-direction: column;
+        justify-content: space-between;
+        transform: translate(-50%, -48%);
+      }
+      .kicker { margin: 0; color: var(--sun); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+      h1 { max-width: 9ch; margin: 0.8rem 0 0; font-family: var(--display); font-size: clamp(3.5rem, 5.7vw, 6.4rem); font-weight: 400; letter-spacing: 0.01em; line-height: 0.76; }
+      h1 em { color: var(--sun); font-family: Georgia, serif; font-size: 0.88em; font-style: italic; font-weight: 400; }
+      .hero-copy .summary { max-width: 24ch; margin: 0; font-family: Georgia, serif; font-size: clamp(1rem, 1.3vw, 1.18rem); line-height: 1.15; }
+      .hero-copy .summary strong { display: block; margin-top: 0.75rem; font-family: var(--sans); font-size: 0.8em; line-height: 1.38; }
+      .role-list { display: grid; grid-template-columns: 1fr auto; gap: 0.15rem 0.6rem; margin: 1.15rem 0 0; padding: 0; list-style: none; font-size: 0.73rem; font-weight: 720; line-height: 1.1; }
+      .role-list li { display: contents; }
+      .role-list span:last-child { color: var(--sun); font-family: Georgia, serif; font-size: 0.9rem; }
+      .role-list .active { color: var(--sun); }
+
+      .figure {
+        position: absolute;
+        z-index: 3;
+        pointer-events: none;
+        background-image: url("assets/creation-patient-clinician-reference.png");
+        background-repeat: no-repeat;
+        filter: saturate(0.93) contrast(1.12) drop-shadow(0 1.8rem 1.8rem rgba(6, 15, 13, 0.45));
+      }
+      .patient {
+        bottom: -12%;
+        left: -9%;
+        width: min(59vw, 51rem);
+        height: min(86vh, 52rem);
+        background-position: left 44%;
+        background-size: 220% auto;
+        clip-path: polygon(0 92%, 3% 72%, 6% 55%, 10% 39%, 15% 29%, 20% 25%, 25% 28%, 28% 36%, 28% 47%, 37% 49%, 48% 47%, 60% 41%, 70% 33%, 78% 24%, 83% 24%, 85% 31%, 83% 39%, 89% 47%, 96% 57%, 96% 66%, 91% 68%, 84% 63%, 77% 64%, 72% 73%, 83% 81%, 96% 89%, 100% 97%, 91% 100%, 72% 99%, 59% 95%, 46% 89%, 35% 87%, 24% 83%, 14% 80%, 6% 86%);
+      }
+      .clinician {
+        right: -10%;
+        bottom: -14%;
+        width: min(61vw, 53rem);
+        height: min(87vh, 53rem);
+        background-position: 78% 4%;
+        background-size: 220% auto;
+        clip-path: polygon(0 84%, 8% 77%, 16% 68%, 23% 58%, 29% 45%, 33% 28%, 40% 12%, 49% 3%, 61% 4%, 72% 12%, 79% 24%, 80% 37%, 88% 51%, 100% 60%, 99% 82%, 91% 88%, 80% 85%, 67% 79%, 56% 69%, 48% 59%, 41% 50%, 34% 48%, 27% 54%, 20% 63%, 11% 70%, 4% 80%);
+      }
+      .role-badge {
+        position: absolute;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid rgba(255, 248, 239, 0.85);
+        border-radius: 999px;
+        background: rgba(17, 34, 29, 0.84);
+        box-shadow: 0 0.45rem 1rem rgba(5, 15, 12, 0.32);
+        color: var(--paper);
+        font-size: 0.64rem;
+        font-weight: 850;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .role-badge::before { width: 0.45rem; height: 0.45rem; border-radius: 50%; content: ""; background: var(--sun); box-shadow: 0 0 0 0.27rem rgba(255, 206, 78, 0.2); }
+      .patient-label { bottom: 24%; left: 12%; }
+      .clinician-label { top: 30%; right: 12%; }
+      .wearable {
+        position: absolute;
+        z-index: 5;
+        bottom: 29%;
+        left: 32%;
+        width: 2.2rem;
+        height: 0.95rem;
+        border: 0.2rem solid var(--sun);
+        border-radius: 99px;
+        box-shadow: 0 0 0 4px rgba(20, 35, 30, 0.72);
+        transform: rotate(-28deg);
+      }
+      .stethoscope {
+        position: absolute;
+        z-index: 5;
+        top: 40%;
+        right: 27%;
+        width: 4rem;
+        height: 3rem;
+        border: 0.22rem solid var(--sun);
+        border-top: 0;
+        border-radius: 0 0 3rem 3rem;
+        filter: drop-shadow(0 2px 0 rgba(15, 31, 26, 0.7));
+        transform: rotate(-14deg);
+      }
+      .stethoscope::after { position: absolute; right: -0.34rem; bottom: -0.3rem; width: 0.67rem; height: 0.67rem; border-radius: 50%; content: ""; background: var(--sun); }
+      .handoff { position: absolute; z-index: 5; top: 50%; left: 50%; width: 5rem; height: 5rem; transform: translate(-50%, -24%); }
+      .handoff::before { position: absolute; top: 50%; right: -3.4rem; left: -3.4rem; height: 2px; content: ""; background: linear-gradient(90deg, transparent, var(--sun) 25%, var(--sun) 75%, transparent); }
+      .handoff::after { position: absolute; top: calc(50% - 0.38rem); left: calc(50% - 0.38rem); width: 0.76rem; height: 0.76rem; border: 2px solid var(--sun); border-radius: 50%; content: ""; background: var(--moss-deep); box-shadow: 0 0 0 0.45rem rgba(255, 206, 78, 0.18); }
+
+      .footer { color: rgba(255, 248, 239, 0.86); font-size: 0.66rem; line-height: 1.35; }
+      .footer p { max-width: 42ch; margin: 0; }
+      .footer p:first-child { font-weight: 720; }
+
+      @media (max-width: 800px) {
+        .page { min-height: 100svh; padding-inline: 1rem; background-position: 50% center; }
+        .nav ul li:not(:last-child) { display: none; }
+        .hero { min-height: 46rem; }
+        .hero-copy { top: 47%; width: min(76vw, 25rem); min-height: 25rem; transform: translate(-50%, -50%); }
+        h1 { font-size: clamp(3.5rem, 14vw, 5rem); }
+        .patient { bottom: 0; left: -43%; width: 104vw; height: 67vh; background-size: 220% auto; }
+        .clinician { right: -45%; bottom: -1%; width: 106vw; height: 67vh; background-size: 220% auto; }
+        .patient-label { bottom: 14%; left: 4%; }
+        .clinician-label { top: 19%; right: 4%; }
+        .wearable { bottom: 17%; left: 16%; transform: scale(0.8) rotate(-28deg); }
+        .stethoscope { top: 30%; right: 13%; transform: scale(0.78) rotate(-14deg); }
+        .footer { display: block; }
+        .footer p + p { margin-top: 0.3rem; }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .handoff::after { animation: pulse 1.8s ease-in-out infinite; }
+        @keyframes pulse { 50% { transform: scale(1.35); box-shadow: 0 0 0 0.7rem rgba(255, 206, 78, 0.05); } }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="nav">
+        <a class="brand" href="#top" aria-label="HeyJule home"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">HeyJule</span></a>
+        <ul aria-label="Main navigation">
+          <li><a href="#patient">For patients</a></li>
+          <li><a href="#clinician">For clinicians</a></li>
+          <li><a class="nav-cta" href="#demo">Open demo</a></li>
+        </ul>
+      </header>
+
+      <section class="hero" id="top">
+        <div class="figure patient" aria-hidden="true"></div>
+        <div class="figure clinician" aria-hidden="true"></div>
+        <span class="wearable" aria-hidden="true"></span>
+        <span class="stethoscope" aria-hidden="true"></span>
+        <p class="role-badge patient-label">Patient</p>
+        <p class="role-badge clinician-label">Clinician</p>
+        <span class="handoff" aria-hidden="true"></span>
+
+        <div class="hero-copy">
+          <div>
+            <p class="kicker">One shared health story</p>
+            <h1>Care, <em>connected.</em></h1>
+          </div>
+          <div>
+            <p class="summary">From one lived experience to one useful clinical view.<strong>HeyJule brings symptoms, data and care into the same ongoing conversation.</strong></p>
+            <ul class="role-list" aria-label="HeyJule views">
+              <li><span class="active">Patient</span><span>I</span></li>
+              <li><span>Clinician</span><span>II</span></li>
+              <li><span>Shared timeline</span><span>III</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>Starts with menopause. Built to scale to more conditions, for women and men.</p>
+        <p>Research and decision-support prototype, not a diagnostic tool.</p>
+      </footer>
+    </main>
+  </body>
+</html>

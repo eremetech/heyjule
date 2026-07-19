@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HeyJule, one shared health story</title>
+<meta name="description" content="HeyJule turns fragmented hormonal-health data into one shared, longitudinal story for patients and clinicians.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%23E95031%22/></svg>">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=tanker@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --coral: #E95031;
+    --coral-deep: #D64425;
+    --cream: #FFF4ED;
+    --umber: #3A150A;
+    --umber-soft: #6B2C18;
+    --display: 'Tanker', 'Arial Black', Impact, sans-serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--cream);
+    background: var(--coral);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* fine grain behind content */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.06;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: clamp(20px, 3vh, 34px) clamp(24px, 4vw, 64px) clamp(16px, 2.4vh, 26px);
+    gap: clamp(8px, 1.6vh, 18px);
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: clamp(6px, 1.2vh, 12px); }
+  .wordmark {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(52px, 9.5vh, 96px);
+    line-height: 0.95;
+    letter-spacing: 0.005em;
+    color: var(--cream);
+  }
+  .statement { max-width: 640px; }
+  .statement p {
+    margin: 0;
+    font-size: clamp(14px, 1.8vh, 16.5px);
+    line-height: 1.5;
+  }
+  .statement .problem { color: var(--umber); }
+  .statement .solution { color: var(--cream); font-weight: 650; }
+  .statement .scale { color: var(--umber); font-weight: 400; }
+
+  /* The two views */
+  .split {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
+  }
+
+  /* the two frescoes, reaching toward the seam */
+  .fig {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.38;
+    filter: grayscale(1) contrast(1.05);
+    mix-blend-mode: multiply;
+    transition: opacity 0.45s ease, filter 0.45s ease, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fig img { display: block; width: 100%; height: auto; }
+
+  .fig-adam {
+    width: clamp(280px, 42vw, 640px);
+    left: -5%;
+    bottom: -10%;
+  }
+  .fig-god {
+    width: clamp(300px, 44vw, 680px);
+    right: -4%;
+    top: -10%;
+  }
+
+  /* hovering a half wakes its figure into full fresco colour */
+  .split:has(.half-left:hover)  .fig-adam,
+  .split:has(.half-right:hover) .fig-god {
+    opacity: 1;
+    filter: none;
+    mix-blend-mode: normal;
+  }
+
+  .half {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: clamp(10px, 2vh, 18px);
+    padding: clamp(16px, 3vh, 30px) clamp(18px, 2.6vw, 44px);
+    text-decoration: none;
+    color: var(--cream);
+    border-radius: 18px;
+    transition: background-color 0.2s ease;
+  }
+  .half:hover { background-color: rgba(58, 21, 10, 0.12); }
+
+  .half h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(44px, 8.5vh, 86px);
+    line-height: 1;
+    color: var(--cream);
+    text-shadow: 0 1px 22px rgba(233, 80, 49, 0.55);
+  }
+  .half .go {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 750;
+    font-size: clamp(14px, 1.8vh, 16px);
+    color: var(--cream);
+  }
+  .go svg { transition: transform 0.18s ease; }
+  .half:hover .go svg { transform: translate(3px, -3px); }
+
+  /* both views converge on the shared timeline */
+  .half-left  { text-align: right; align-items: flex-end; }
+  .half-right { text-align: left;  align-items: flex-start; }
+
+  /* the seam: signal running between the two views */
+  .seam-wrap {
+    position: relative;
+    z-index: 1;
+    width: 44px;
+    height: 100%;
+  }
+  .seam { height: 100%; width: 44px; display: block; }
+
+  /* Jule: the spark where the two hands meet, mid-seam */
+  .spark {
+    position: absolute;
+    z-index: 3;
+    left: 50%;
+    top: 38%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    pointer-events: none;
+  }
+  /* halo: the glow that marks the meeting point */
+  .spark::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      rgba(255, 244, 237, 0.34),
+      rgba(255, 244, 237, 0.10) 45%,
+      transparent 70%);
+  }
+  .spark .dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--cream);
+    box-shadow:
+      0 0 20px rgba(255, 244, 237, 1),
+      0 0 60px rgba(255, 244, 237, 0.65);
+    animation: breathe 1.6s ease-in-out infinite alternate;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes breathe {
+    from { transform: scale(1); }
+    to   { transform: scale(1.22); }
+  }
+  .spark .ring {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 244, 237, 0.9);
+    transform: translate(-50%, -50%);
+    animation: ripple 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+  .spark .ring.r2 { animation-delay: 1.2s; }
+  @keyframes ripple {
+    0%   { width: 16px; height: 16px; opacity: 1; }
+    100% { width: 120px; height: 120px; opacity: 0; }
+  }
+  .spark .name {
+    font-family: var(--display);
+    font-size: 21px;
+    letter-spacing: 0.05em;
+    color: var(--cream);
+    text-shadow: 0 0 14px rgba(255, 244, 237, 0.75);
+  }
+
+  @keyframes seamflow { to { stroke-dashoffset: -18; } }
+  .seam-dash { animation: seamflow 2.2s linear infinite; }
+
+  /* ---------- the touch: leaving for a demo ---------- */
+  .burst {
+    position: fixed;
+    z-index: 50;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--cream);
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.85s cubic-bezier(0.75, 0, 0.25, 1) 0.25s;
+    pointer-events: none;
+  }
+
+  body.leaving .half { pointer-events: none; }
+  body.leaving .fig {
+    opacity: 1;
+    filter: none;
+    mix-blend-mode: normal;
+  }
+  body.leaving .fig-adam { transform: translate(3.5%, -4.5%); }
+  body.leaving .fig-god  { transform: translate(-3.5%, 4.5%); }
+  body.leaving .spark .dot { transform: scale(2.6); animation: none; }
+  body.leaving .spark .name { opacity: 0; transition: opacity 0.3s ease; }
+  body.leaving .seam-dash { animation-duration: 0.3s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seam-dash { animation: none; }
+    .spark .ring { animation: none; opacity: 0; }
+    .spark .dot { animation: none; }
+    .fig, .burst { transition: none; }
+  }
+
+  @media (max-width: 880px), (max-height: 600px) {
+    body { overflow: auto; }
+    .page { height: auto; min-height: 100vh; }
+    .split { grid-template-columns: 1fr; }
+    .seam-wrap, .spark, .fig { display: none; }
+    .half-left, .half-right { text-align: left; align-items: flex-start; }
+    .half h2 { text-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <h1 class="wordmark">HeyJule</h1>
+    <div class="statement">
+      <p class="problem">The problem: health data scatters across apps, labs and letters, retold from memory.</p>
+      <p class="solution">Our solution: Jule tells it once, as one timeline, for both sides of the doctor's desk.</p>
+      <p class="scale">Starts with menopause. Built to scale to more conditions, for women and men.</p>
+    </div>
+  </header>
+
+  <div class="split">
+
+    <div class="fig fig-adam" aria-hidden="true">
+      <img src="assets/adam.png" alt="" width="1400" height="1012">
+    </div>
+    <div class="fig fig-god" aria-hidden="true">
+      <img src="assets/god.png" alt="" width="1600" height="1132">
+    </div>
+
+    <a class="half half-left" href="patient-demo.html" aria-label="Open the patient demo">
+      <h2>Patient</h2>
+      <span class="go">Open demo
+        <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M3 11 L11 3 M5 3 h6 v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </a>
+
+    <div class="seam-wrap">
+      <svg class="seam" viewBox="0 0 44 400" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M22 0 C 22 40 10 60 10 100 S 34 160 34 200 10 260 10 300 22 360 22 400"
+              fill="none" stroke="rgba(255,244,237,0.35)" stroke-width="2"
+              vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+        <path class="seam-dash"
+              d="M22 0 C 22 40 10 60 10 100 S 34 160 34 200 10 260 10 300 22 360 22 400"
+              fill="none" stroke="#FFF4ED" stroke-width="2.4"
+              vector-effect="non-scaling-stroke" stroke-linecap="round"
+              stroke-dasharray="2 16"/>
+      </svg>
+      <div class="spark" aria-hidden="true">
+        <span class="ring"></span>
+        <span class="ring r2"></span>
+        <span class="dot"></span>
+        <span class="name">Jule</span>
+      </div>
+    </div>
+
+    <a class="half half-right" href="clinician-demo.html" aria-label="Open the clinician demo">
+      <h2>Clinician</h2>
+      <span class="go">Open demo
+        <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M3 11 L11 3 M5 3 h6 v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </a>
+
+  </div>
+
+</div>
+
+<div class="burst" aria-hidden="true"></div>
+
+<script>
+  // the touch: both frescoes bloom and converge, the spark ignites,
+  // and cream light swallows the screen before the demo opens
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll('.half').forEach((half) => {
+    half.addEventListener('click', (e) => {
+      if (reduced || document.body.classList.contains('leaving')) {
+        return; // reduced motion: plain navigation
+      }
+      e.preventDefault();
+
+      const burst = document.querySelector('.burst');
+      const dot = document.querySelector('.spark .dot');
+      let x = window.innerWidth / 2;
+      let y = window.innerHeight / 2;
+      if (dot && dot.offsetParent !== null) {
+        const r = dot.getBoundingClientRect();
+        x = r.left + r.width / 2;
+        y = r.top + r.height / 2;
+      }
+      burst.style.left = x + 'px';
+      burst.style.top = y + 'px';
+
+      // scale so the 24px dot covers the farthest viewport corner
+      const reach = Math.hypot(
+        Math.max(x, window.innerWidth - x),
+        Math.max(y, window.innerHeight - y)
+      );
+      const scale = (reach * 2) / 24 * 1.1;
+
+      document.body.classList.add('leaving');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          burst.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        });
+      });
+
+      setTimeout(() => { window.location.href = half.href; }, 1150);
+
+      // safety: if navigation was blocked, restore the page
+      setTimeout(() => {
+        document.body.classList.remove('leaving');
+        burst.style.transform = 'translate(-50%, -50%) scale(0)';
+      }, 3000);
+    });
+  });
+</script>
+
+</body>
+</html>
