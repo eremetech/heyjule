@@ -11,6 +11,11 @@ const baseURL =
 const apiAudience =
   process.env.HEYJULE_API_URL ??
   (production ? "https://api.jules.agenticsonar.com" : "http://localhost:8787");
+// The patient app served as a web build; it calls the magic-link and token
+// endpoints cross-origin, so Better Auth must trust it.
+const patientWebOrigin =
+  process.env.HEYJULE_PATIENT_WEB_ORIGIN ??
+  (production ? "https://app.jules.agenticsonar.com" : "http://localhost:8081");
 const doctorScopes = [
   "care:invite",
   "doctor:key:write",
@@ -30,7 +35,7 @@ const patientScopes = [
 export const auth = betterAuth({
   baseURL,
   database: db,
-  trustedOrigins: [baseURL, "heyjule://"],
+  trustedOrigins: [baseURL, patientWebOrigin, "heyjule://"],
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 12,
