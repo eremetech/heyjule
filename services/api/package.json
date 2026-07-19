@@ -2,11 +2,29 @@
   "name": "@heyjule/api",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "description": "Core API gateway — the connection layer wiring patient data, services, and doctors together.",
   "scripts": {
-    "dev": "echo \"TODO: run api\" && exit 0",
-    "build": "echo \"TODO: build api\" && exit 0",
-    "lint": "echo \"TODO: lint api\" && exit 0",
-    "typecheck": "echo \"TODO: typecheck api\" && exit 0"
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "care-link": "tsx src/cli.ts care-link"
+  },
+  "dependencies": {
+    "@heyjule/crypto": "workspace:*",
+    "@heyjule/shared-types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.11.1",
+    "jose": "^6.2.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3"
   }
 }

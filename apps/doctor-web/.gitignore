@@ -1,0 +1,3 @@
+# Local SQLite database
+data/
+next-env.d.ts

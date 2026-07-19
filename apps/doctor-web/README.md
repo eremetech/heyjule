@@ -1,25 +1,76 @@
 # @heyjule/doctor-web
 
-Doctor-facing **web app** (planned stack: Next.js + TypeScript).
+Doctor-facing web app: sign in, link patients via invite codes, and read each
+patient's brief — a summary of their symptom history (voice logs, messages,
+ChatGPT-conversation summaries) plus 14 days of wearable data.
 
-## Responsibilities
+Next.js (App Router) with its own backend: route handlers + server actions,
+[Better Auth](https://better-auth.com) for email/password sessions, and SQLite
+(`better-sqlite3`) for storage. No external services required.
 
-- Let doctors **generate and share a code / QR code** with a patient to establish a link.
-- Receive and display an **interactive summary/report** of the connected patient's
-  wearable + conversational data.
-- Manage connected patients and review trends over time.
+## Setup
 
-## Talks to
+```bash
+cp .env.example .env.local        # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
+pnpm db:migrate                   # creates the Better Auth tables in ./data/heyjule.db
+pnpm seed                         # demo doctor + 2 linked patients with data
+pnpm dev                          # http://localhost:3000
+```
 
-- `services/api` (via `@heyjule/api-client`) for patient linking and data access.
-- `services/reports` for the interactive summary/report payloads.
+Demo sign-in after seeding: `demo.doctor@heyjule.dev` / `jule-demo-password`.
 
-## Structure (to be added)
+## QR report flow (the frictionless path)
+
+The seed also prints a **report link** (`/r/<token>`) — the expiring,
+patient-scoped URL that would be embedded in the EPR PDF. Opening it shows a
+QR gate ("Sign in to view <patient>'s data"); scanning the QR (or opening the
+`/approve/<channel>` URL it encodes) simulates the phone-side approval, and the
+desktop tab signs itself in. The viewer session is a browser-session cookie
+bound to that one report link, capped at 30 minutes server-side. Design and
+production plan: [`docs/frictionless-signin.md`](../../docs/frictionless-signin.md).
+
+On localhost your phone can't reach the QR URL — open the encoded
+`/approve/…` link in a second tab instead, or run `next dev -H 0.0.0.0` and use
+your LAN IP.
+
+The report opens with a **noteworthy strip** (computed deviation flags — see
+`src/lib/insights.ts`), a collapsed one-line summary, PROM sections rendered
+per instrument (MRS, ISI, … — fully data-driven), treatments labeled with
+their EPR import source, and wearable tiles. PROM history sparklines and the
+wearable tiles click through to full-page interactive charts
+(`/r/<token>/prom/<item>` and `/r/<token>/wearables`) with crosshair tooltips,
+symptom/patient-note markers, and treatment-start lines.
+
+## Security model
+
+- **Session auth** — Better Auth email/password (12-char minimum), 7-day
+  httpOnly session cookies, secure cookies when served over https, built-in
+  rate limiting on auth endpoints.
+- **Middleware** redirects unauthenticated requests optimistically; the real
+  check is `requireDoctor()` in every protected layout, page, and server action.
+- **Scoped reads** — all patient data resolves through `patient_links` with an
+  `active` (consented) link for the requesting doctor. A patient id in the URL
+  is never trusted on its own; an unlinked doctor gets a 404.
+- **Consent flow** — the doctor generates a one-off invite code; the patient
+  claims it in the mobile app to activate the link. Codes are revocable while
+  pending, and links are revocable by the patient (`status = 'revoked'`).
+- **Headers** — nosniff, frame denial, strict referrer policy, and (in
+  production) HSTS + a restrictive Content-Security-Policy.
+
+> Open sign-up is on for development. Gate doctor registration (invite-only or
+> verified-identity onboarding) before any real deployment, and move the domain
+> tables behind `services/api` when the shared connection layer lands.
+
+## Layout
 
 ```
 src/
-  app/            # Next.js app router
-  features/       # patient-linking, report-viewer, patients-list
-  components/
-  lib/
+├── app/
+│   ├── (auth)/            # sign-in, sign-up
+│   ├── (app)/             # authed shell: dashboard, patient briefs, actions
+│   └── api/auth/[...all]/ # Better Auth handler
+├── components/            # sparkline, sign-out
+├── lib/                   # auth config, auth client, db + scoped queries, session gate
+└── middleware.ts
+scripts/seed.ts            # demo data
 ```

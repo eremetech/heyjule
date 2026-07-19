@@ -52,7 +52,12 @@ pnpm build       # build all workspaces
 pnpm lint        # lint all workspaces
 ```
 
-> Structure only — no application code yet. Each workspace has a README describing its scope.
+The doctor and patient surfaces are active prototypes. `services/api` now contains
+the production-shaped backend boundary for OAuth-protected patient records, the
+ChatGPT MCP `new_entry` handoff, and doctor-recipient encrypted exports. Review
+[`docs/backend-security.md`](docs/backend-security.md) before using real health
+data; the document separates implemented guarantees from production/compliance
+work that remains.
 
 ## Requirements
 

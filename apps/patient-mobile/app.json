@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "heyjule",
+    "slug": "heyjule",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "heyjule",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "health.heyjule.patient",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Heyjule uses your microphone only while you record a health check-in."
+      }
+    },
+    "android": {
+      "package": "health.heyjule.patient",
+      "permissions": ["RECORD_AUDIO"]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow heyjule to listen while you record a health check-in."
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow heyjule to protect your private health journal."
+        }
+      ]
+    ]
+  }
+}

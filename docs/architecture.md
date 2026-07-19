@@ -44,3 +44,9 @@ user-facing systems sit on one shared backend.
 
 Health data is sensitive. The patient controls what a linked doctor can see; access is
 scoped and revocable. Consent and access-control rules live in `services/api`.
+
+The API now also distinguishes server-readable patient records from recipient-
+encrypted transfer objects. ChatGPT inbox entries are sealed to a patient device
+and deleted after explicit device acknowledgement; doctor exports are sealed on
+the patient client to a doctor-controlled public key. See
+[`backend-security.md`](backend-security.md) for the exact guarantees and limits.
