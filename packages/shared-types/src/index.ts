@@ -40,14 +40,122 @@ export type InboxEntry = {
   deviceId: string;
   envelope: SealedEnvelope;
   createdAt: string;
+};
+
+export const PATIENT_ENTRY_SOURCES = [
+  "patient_check_in",
+  "in_app_conversation",
+  "chatgpt_app_mcp",
+  "apple_health",
+  "electronic_patient_record",
+  "patient_reported_outcome",
+] as const;
+
+export type PatientEntrySource = (typeof PATIENT_ENTRY_SOURCES)[number];
+export type PatientDataMode = "mock" | "live";
+
+type PatientEntryBase<
+  Kind extends string,
+  Source extends PatientEntrySource,
+  Payload extends Record<string, unknown>,
+> = {
+  id: string;
+  occurredAt: string;
+  kind: Kind;
+  source: Source;
+  dataMode: PatientDataMode;
+  payload: Payload;
+};
+
+export type CheckInEntry = PatientEntryBase<
+  "check_in",
+  "patient_check_in" | "in_app_conversation",
+  {
+    title?: string;
+    note: string;
+    symptoms: string[];
+    severity: number;
+    treatment?: string;
+    voiceDuration?: number;
+  }
+>;
+
+export type ChatSummaryEntry = PatientEntryBase<
+  "chat_summary",
+  "chatgpt_app_mcp" | "in_app_conversation",
+  {
+    title: string;
+    summary: string;
+    noteworthy: NoteworthyEntry[];
+    sourceInboxId?: string;
+  }
+>;
+
+export type PromEntry = PatientEntryBase<
+  "prom",
+  "patient_reported_outcome",
+  {
+    instrument: string;
+    item: string;
+    score: number;
+    maxScore: number;
+    note?: string;
+  }
+>;
+
+export type WearableEntry = PatientEntryBase<
+  "wearable",
+  "apple_health",
+  {
+    date: string;
+    sleepMinutes: number;
+    restingHeartRate: number;
+    steps: number;
+    hrvMs: number;
+  }
+>;
+
+export type TreatmentEntry = PatientEntryBase<
+  "treatment",
+  "electronic_patient_record",
+  {
+    name: string;
+    startedAt: string;
+    endedAt?: string;
+    outcome?: string;
+  }
+>;
+
+export type PatientEntry =
+  | CheckInEntry
+  | ChatSummaryEntry
+  | PromEntry
+  | WearableEntry
+  | TreatmentEntry;
+
+export type PatientProfile = {
+  name: string;
+  dateOfBirth: string;
+  sex: string;
+};
+
+export type LinkedPatient = {
+  id: string;
+  profile: PatientProfile | null;
+  linkedAt: string;
+  lastEntryAt: string | null;
+};
+
+export type CareInvite = {
+  id: string;
+  code: string;
+  createdAt: string;
   expiresAt: string;
 };
 
-export type PatientEntry = {
-  id: string;
-  occurredAt: string;
-  kind: "check_in" | "chat_summary" | "prom" | "wearable";
-  payload: Record<string, unknown>;
+export type CareRelationship = {
+  doctorId: string;
+  linkedAt: string;
 };
 
 export type DoctorPublicKey = {
@@ -66,4 +174,65 @@ export type EncryptedDoctorExport = {
   envelope: SealedEnvelope;
   createdAt: string;
   expiresAt: string;
+};
+
+export type DoctorExportMetadata = Omit<EncryptedDoctorExport, "envelope">;
+
+export type ClinicalReportScope = {
+  symptoms: boolean;
+  wearables: boolean;
+  treatments: boolean;
+  conversations: boolean;
+  proms: boolean;
+};
+
+export type ClinicalReportFinding = {
+  title: string;
+  detail: string;
+  level: "notable" | "attention" | "urgent";
+  evidenceEntryIds: string[];
+};
+
+export type ClinicalReportTrend = {
+  metric: string;
+  direction: "improving" | "stable" | "worsening" | "mixed";
+  detail: string;
+  evidenceEntryIds: string[];
+};
+
+export type ClinicalReportSection = {
+  key: "symptoms" | "wearables" | "proms" | "treatments" | "conversations";
+  summary: string;
+  evidenceEntryIds: string[];
+};
+
+/**
+ * The plaintext report exists only transiently while the patient requests it
+ * and while the intended doctor's browser renders it. Persisted exports store
+ * this value only inside a `SealedEnvelope` targeted to the doctor's key.
+ */
+export type ClinicalReport = {
+  version: 1;
+  generatedAt: string;
+  period: { from: string; to: string; timeframeDays: number };
+  patient: PatientProfile;
+  headline: string;
+  summary: string;
+  findings: ClinicalReportFinding[];
+  trends: ClinicalReportTrend[];
+  sections: ClinicalReportSection[];
+  sources: Array<{ source: PatientEntrySource; count: number }>;
+  sourceEntryIds: string[];
+  generation: {
+    provider: "openai";
+    model: string;
+    responseId: string;
+  };
+  disclaimer: string;
+};
+
+export type GenerateClinicalReportRequest = {
+  doctorId: string;
+  timeframeDays: 7 | 30 | 90;
+  scope: ClinicalReportScope;
 };

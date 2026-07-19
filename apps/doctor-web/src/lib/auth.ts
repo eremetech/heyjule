@@ -1,8 +1,16 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
+import { jwt } from "better-auth/plugins";
 import { db } from "./db.ts";
 
 const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const apiAudience = process.env.HEYJULE_API_URL ?? "http://localhost:8787";
+const doctorScopes = [
+  "care:invite",
+  "doctor:key:write",
+  "report:data:read",
+  "report:read",
+].join(" ");
 
 export const auth = betterAuth({
   baseURL,
@@ -25,7 +33,26 @@ export const auth = betterAuth({
   advanced: {
     useSecureCookies: baseURL.startsWith("https://"),
   },
-  plugins: [nextCookies()],
+  plugins: [
+    jwt({
+      jwks: {
+        keyPairConfig: { alg: "ES256" },
+        rotationInterval: 60 * 60 * 24 * 30,
+        gracePeriod: 60 * 60 * 24 * 30,
+      },
+      jwt: {
+        issuer: baseURL,
+        audience: apiAudience,
+        expirationTime: "10m",
+        definePayload: ({ user }) => ({
+          email: user.email,
+          role: "doctor",
+          scope: doctorScopes,
+        }),
+      },
+    }),
+    nextCookies(),
+  ],
 });
 
 export type Session = typeof auth.$Infer.Session;

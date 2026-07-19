@@ -60,7 +60,11 @@ function AppShell() {
         ) : null}
         {route === "checkin" ? <CheckInScreen onClose={() => navigate("home")} onComplete={() => navigate("home")} /> : null}
         {route === "health" ? (
-          <HealthScreen onClose={() => navigate("home")} onStartCheckIn={() => navigate("checkin")} />
+          <HealthScreen
+            onClose={() => navigate("home")}
+            onStartCheckIn={() => navigate("checkin")}
+            onOpenShare={() => navigate("share")}
+          />
         ) : null}
         {route === "journal" ? (
           <JournalScreen onClose={() => navigate("home")} onStartCheckIn={() => navigate("checkin")} />

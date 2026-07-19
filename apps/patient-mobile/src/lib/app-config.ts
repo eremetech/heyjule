@@ -8,6 +8,7 @@ export const appConfig = {
   oauthClientId,
   oauthConfigured: Boolean(apiUrl && oauthIssuer && oauthClientId),
   devAccessToken: __DEV__ ? process.env.EXPO_PUBLIC_HEYJULE_DEV_ACCESS_TOKEN?.trim() || null : null,
+  mockDataEnabled: process.env.EXPO_PUBLIC_HEYJULE_MOCK_DATA_ENABLED !== "false",
 };
 
 export const patientScopes = [
@@ -18,5 +19,7 @@ export const patientScopes = [
   "entry:claim",
   "patient:data:write",
   "patient:data:read",
+  "patient:profile:write",
+  "care:link",
   "report:write",
 ];

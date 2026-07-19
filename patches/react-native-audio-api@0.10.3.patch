@@ -1,0 +1,16 @@
+diff --git a/package.json b/package.json
+index c51cf2d5839e3fbdc1c3206faaaba6d5ddbc3bbb..b3088c9d397515892044d667f43dd8abb77d4337 100644
+--- a/package.json
++++ b/package.json
+@@ -150,6 +150,11 @@
+     "name": "rnaudioapi",
+     "type": "modules",
+     "jsSrcsDir": "src/specs",
++    "ios": {
++      "modulesProvider": {
++        "AudioAPIModule": "AudioAPIModule"
++      }
++    },
+     "android": {
+       "javaPackageName": "com.swmansion.audioapi"
+     }

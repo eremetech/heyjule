@@ -10,6 +10,7 @@ export default async function ApprovePage({
 }: {
   params: Promise<{ channel: string }>;
 }) {
+  if (process.env.HEYJULE_ENABLE_LEGACY_REPORTS !== "true") notFound();
   const { channel } = await params;
   const row = getQrChannel(channel);
   if (!row) notFound();

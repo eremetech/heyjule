@@ -7,6 +7,9 @@ type Params = { params: Promise<{ channel: string }> };
 /* Polled by the desktop QR page. On first poll after phone approval, the
  * channel is consumed (single use) and the viewer-session cookie is set. */
 export async function GET(request: NextRequest, { params }: Params) {
+  if (process.env.HEYJULE_ENABLE_LEGACY_REPORTS !== "true") {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const { channel } = await params;
   const row = getQrChannel(channel);
   if (!row) return NextResponse.json({ status: "expired" });
@@ -30,6 +33,9 @@ export async function GET(request: NextRequest, { params }: Params) {
  * only reachable from the authenticated HeyJule doctor app (or replaced by a
  * passkey ceremony) — here it simulates that step for the mock. */
 export async function POST(_request: NextRequest, { params }: Params) {
+  if (process.env.HEYJULE_ENABLE_LEGACY_REPORTS !== "true") {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const { channel } = await params;
   const ok = approveQrChannel(channel);
   return NextResponse.json({ ok }, { status: ok ? 200 : 410 });

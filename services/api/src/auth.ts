@@ -29,12 +29,20 @@ export function createAuthenticator(options: {
   issuer: string;
   audience: string;
   jwksUrl: string;
+  additionalIssuers?: Array<{ issuer: string; audience: string; jwksUrl: string }>;
   devTokens?: string;
 }): Authenticate {
   const developmentTokens = options.devTokens
     ? devTokenSchema.parse(JSON.parse(options.devTokens) as unknown)
     : null;
-  const jwks = createRemoteJWKSet(new URL(options.jwksUrl));
+  const issuers = [
+    { issuer: options.issuer, audience: options.audience, jwks: createRemoteJWKSet(new URL(options.jwksUrl)) },
+    ...(options.additionalIssuers ?? []).map((value) => ({
+      issuer: value.issuer,
+      audience: value.audience,
+      jwks: createRemoteJWKSet(new URL(value.jwksUrl)),
+    })),
+  ];
 
   return async (authorizationHeader) => {
     const token = bearerToken(authorizationHeader);
@@ -49,20 +57,23 @@ export function createAuthenticator(options: {
       };
     }
 
-    try {
-      const { payload } = await jwtVerify(token, jwks, {
-        issuer: options.issuer,
-        audience: options.audience,
-        algorithms: ["ES256", "RS256", "PS256", "EdDSA"],
-      });
-      if (!payload.sub) return null;
-      const role = payload.heyjule_role ?? payload.role;
-      if (role !== "patient" && role !== "doctor" && role !== "service") return null;
-      const scopeClaim = typeof payload.scope === "string" ? payload.scope.split(/\s+/u) : [];
-      return { sub: payload.sub, role, scopes: new Set(scopeClaim.filter(Boolean)) };
-    } catch {
-      return null;
+    for (const verifier of issuers) {
+      try {
+        const { payload } = await jwtVerify(token, verifier.jwks, {
+          issuer: verifier.issuer,
+          audience: verifier.audience,
+          algorithms: ["ES256", "RS256", "PS256", "EdDSA"],
+        });
+        if (!payload.sub) return null;
+        const role = payload.heyjule_role ?? payload.role;
+        if (role !== "patient" && role !== "doctor" && role !== "service") return null;
+        const scopeClaim = typeof payload.scope === "string" ? payload.scope.split(/\s+/u) : [];
+        return { sub: payload.sub, role, scopes: new Set(scopeClaim.filter(Boolean)) };
+      } catch {
+        // Try the next explicitly configured issuer. Never accept an unlisted issuer.
+      }
     }
+    return null;
   };
 }
 

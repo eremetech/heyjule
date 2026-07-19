@@ -1,4 +1,50 @@
 services:
+  doctor-web:
+    build:
+      context: .
+      dockerfile: apps/doctor-web/Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      DATABASE_PATH: /app/data/identity.db
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET to at least 32 random characters}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the doctor web public HTTPS URL}
+      HEYJULE_API_URL: ${HEYJULE_API_URL:?Set HEYJULE_API_URL to the public API HTTPS URL}
+      HEYJULE_INTERNAL_API_URL: http://api:8787
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+      OPENAI_PHI_ENABLED: ${OPENAI_PHI_ENABLED:-false}
+      HEYJULE_ENABLE_LEGACY_REPORTS: "false"
+    expose:
+      - "3000"
+    volumes:
+      - doctor-web-identity:/app/data
+      - doctor-web-cache:/app/apps/doctor-web/.next/cache
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 20s
+
   api:
     build:
       context: .
@@ -11,12 +57,19 @@ services:
       HEYJULE_API_URL: ${HEYJULE_API_URL:?Set HEYJULE_API_URL to the public HTTPS URL}
       HEYJULE_DATABASE_PATH: /app/data/heyjule-api.db
       HEYJULE_DATA_KEY: ${HEYJULE_DATA_KEY:?Set HEYJULE_DATA_KEY to a 32-byte base64url key}
-      HEYJULE_OAUTH_ISSUER: ${HEYJULE_OAUTH_ISSUER:?Set HEYJULE_OAUTH_ISSUER}
+      HEYJULE_OAUTH_ISSUER: ${HEYJULE_OAUTH_ISSUER:?Set HEYJULE_OAUTH_ISSUER to the patient OAuth issuer}
       HEYJULE_OAUTH_AUDIENCE: ${HEYJULE_OAUTH_AUDIENCE:-}
       HEYJULE_OAUTH_JWKS_URL: ${HEYJULE_OAUTH_JWKS_URL:-}
+      HEYJULE_DOCTOR_OAUTH_ISSUER: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the doctor web public HTTPS URL}
+      HEYJULE_DOCTOR_OAUTH_AUDIENCE: ${HEYJULE_API_URL:?Set HEYJULE_API_URL to the public API HTTPS URL}
+      HEYJULE_DOCTOR_OAUTH_JWKS_URL: http://doctor-web:3000/api/auth/jwks
       HEYJULE_ALLOWED_ORIGINS: ${HEYJULE_ALLOWED_ORIGINS:-}
       HEYJULE_TRUST_PROXY: "true"
       XAI_API_KEY: ${XAI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+      OPENAI_PHI_ENABLED: ${OPENAI_PHI_ENABLED:-false}
+      HEYJULE_ALLOW_MOCK_LLM: ${HEYJULE_ALLOW_MOCK_LLM:-true}
     expose:
       - "8787"
     volumes:
@@ -42,3 +95,5 @@ services:
 
 volumes:
   heyjule-api-data:
+  doctor-web-identity:
+  doctor-web-cache:

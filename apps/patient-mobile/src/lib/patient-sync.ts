@@ -50,11 +50,12 @@ export function logToPatientEntry(log: SymptomLog): PatientEntry {
       id: log.id,
       occurredAt: log.createdAt,
       kind: "chat_summary",
+      source: "chatgpt_app_mcp",
+      dataMode: "live",
       payload: {
         title: log.chatSummary.title,
         summary: log.chatSummary.summary,
         noteworthy: log.chatSummary.noteworthy,
-        source: log.chatSummary.source,
         sourceInboxId: log.remoteEntryId,
       },
     };
@@ -63,12 +64,13 @@ export function logToPatientEntry(log: SymptomLog): PatientEntry {
     id: log.id,
     occurredAt: log.createdAt,
     kind: "check_in",
+    source: log.source === "voice" ? "in_app_conversation" : "patient_check_in",
+    dataMode: "live",
     payload: {
       note: log.note,
       symptoms: log.symptoms,
       severity: log.severity,
       ...(log.treatment ? { treatment: log.treatment } : {}),
-      source: log.source,
       ...(log.voiceDuration === undefined ? {} : { voiceDuration: log.voiceDuration }),
     },
   };

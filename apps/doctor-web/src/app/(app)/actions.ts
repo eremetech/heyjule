@@ -1,24 +1,18 @@
 "use server";
 
-import { randomUUID, randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireDoctor } from "@/lib/session";
-import { createInvite, revokeInvite } from "@/lib/db";
-
-/* Unambiguous alphabet — no 0/O, 1/I. */
-const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+import { heyJuleApi } from "@/lib/heyjule-api";
 
 export async function generateInviteCode() {
-  const doctor = await requireDoctor();
-  let code = "";
-  for (let i = 0; i < 6; i++) code += ALPHABET[randomInt(ALPHABET.length)];
-  createInvite(doctor.id, randomUUID(), code);
+  await requireDoctor();
+  await heyJuleApi.createInvite();
   revalidatePath("/");
 }
 
 export async function revokeInviteCode(formData: FormData) {
-  const doctor = await requireDoctor();
+  await requireDoctor();
   const inviteId = formData.get("inviteId");
-  if (typeof inviteId === "string") revokeInvite(doctor.id, inviteId);
+  if (typeof inviteId === "string") await heyJuleApi.revokeInvite(inviteId);
   revalidatePath("/");
 }

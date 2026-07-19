@@ -8,6 +8,7 @@ export const colors = {
   lineStrong: "rgba(83, 71, 61, 0.17)",
   white: "#FFFFFF",
   coral: "#E98079",
+  coralVivid: "#E95031",
   coralSoft: "#F5C8BE",
   peach: "#F3B97D",
   peachSoft: "#F8DFC5",

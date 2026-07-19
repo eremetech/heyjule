@@ -17,5 +17,11 @@
   },
   "devDependencies": {
     "turbo": "^2.1.0"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "react-native-audio-api@0.10.3": "patches/react-native-audio-api@0.10.3.patch",
+      "expo-constants@18.0.13": "patches/expo-constants@18.0.13.patch"
+    }
   }
 }

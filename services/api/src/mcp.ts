@@ -8,8 +8,6 @@ import type { ApiDatabase } from "./db.ts";
 import { newEntrySchema } from "./schemas.ts";
 
 export const ENTRY_WRITE_SCOPE = "entry:write";
-export const INBOX_TTL_MS = 15 * 60 * 1_000;
-
 export type NewEntryInput = {
   title?: string;
   summary: string;
@@ -32,7 +30,6 @@ export function storeNewEntry(
 
   const id = `inbox_${randomUUID()}`;
   const createdAt = now.toISOString();
-  const expiresAt = new Date(now.getTime() + INBOX_TTL_MS).toISOString();
   const payload: ChatSummaryPayload = {
     title: input.title?.trim() || "Chat summary",
     summary: input.summary.trim(),
@@ -46,7 +43,7 @@ export function storeNewEntry(
     inboxEnvelopeContext(id, device.id),
     randomBytes,
   );
-  const entry: InboxEntry = { id, deviceId: device.id, envelope, createdAt, expiresAt };
+  const entry: InboxEntry = { id, deviceId: device.id, envelope, createdAt };
   database.insertInboxEntry(entry, patientId);
   return { status: "stored" as const, entry };
 }
@@ -72,12 +69,11 @@ export function createMcpServer(options: {
     {
       title: "Send a summary to HeyJule",
       description:
-        "After the patient explicitly asks, send a concise health-chat summary to their HeyJule device. Send only the minimum useful summary and noteworthy items, never the full transcript. The sealed entry expires after 15 minutes unless the device securely saves and acknowledges it.",
+        "After the patient explicitly asks, send a concise health-chat summary to their HeyJule device. Send only the minimum useful summary and noteworthy items, never the full transcript. The sealed entry remains available until the device securely saves and acknowledges it.",
       inputSchema: newEntrySchema,
       outputSchema: {
         status: z.literal("stored"),
         receipt_id: z.string(),
-        expires_at: z.iso.datetime({ offset: true }),
       },
       annotations: {
         destructiveHint: false,
@@ -122,13 +118,12 @@ export function createMcpServer(options: {
       const structuredContent = {
         status: "stored" as const,
         receipt_id: result.entry.id,
-        expires_at: result.entry.expiresAt,
       };
       return {
         content: [
           {
             type: "text" as const,
-            text: "The summary was sealed for your HeyJule device. Open the app within 15 minutes to receive it.",
+            text: "The summary was sealed for your HeyJule device and will be delivered the next time it syncs.",
           },
         ],
         structuredContent,

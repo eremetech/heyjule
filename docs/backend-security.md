@@ -8,8 +8,7 @@ Temporarily holding a chat summary can be appropriate if the patient requested
 the transfer, the purpose and retention are explicit, access is authenticated,
 the payload is minimized, and deletion is enforced. A TTL alone is not enough.
 HeyJule therefore stores the MCP summary only after sealing it to a patient
-device public key, expires it after 15 minutes, and deletes it after the device
-confirms durable storage.
+device public key and deletes it after the device confirms durable storage.
 
 A doctor-only export is also possible: the patient device encrypts the finished
 report to a doctor-controlled public key before upload. The backend stores only
@@ -23,6 +22,7 @@ OpenAI never sees any patient data in every stage of the product.
 | ChatGPT conversation | Controlled by the selected ChatGPT product/workspace policy | Patient and OpenAI processing systems according to that policy | HeyJule cannot make the existing ChatGPT conversation zero-knowledge |
 | MCP `new_entry` inbox | P-256 ECDH + HKDF-SHA256 + AES-256-GCM envelope for the patient device | ChatGPT already has the summary; the HeyJule MCP process sees tool arguments transiently; only the device can decrypt the stored row | Do not claim the server never handles plaintext in memory |
 | Normal patient timeline | AES-256-GCM under a server data key | Authorized HeyJule backend workloads and linked doctors | Encryption at rest is not end-to-end encryption |
+| LLM clinical-draft request | Not persisted by HeyJule; OpenAI request uses `store: false` | Authorized HeyJule process and the configured OpenAI processing systems | `store: false` is not a substitute for the required provider contract, privacy configuration, or legal review |
 | Doctor export | P-256 ECDH + HKDF-SHA256 + AES-256-GCM envelope for the doctor's key | Holder of the doctor private key | Backend sees patient/doctor ids, timestamps, length, key id, and access metadata |
 
 The strongest honest claim is: **HeyJule cannot decrypt stored doctor-export
@@ -38,13 +38,17 @@ boundaries.
 - Authenticated encryption with a unique ephemeral P-256 key, salt, and nonce
   per sealed envelope; the record identity is authenticated as AAD.
 - Two-phase delivery to avoid deleting before durable device storage.
-- Fifteen-minute MCP inbox TTL and maximum 30-day encrypted-export TTL.
+- Acknowledgement-based MCP inbox deletion and maximum 30-day encrypted-export TTL.
 - AES-256-GCM encryption at rest for server-readable records.
 - No plaintext summary in tool results, audit metadata, or database fields.
 - `Cache-Control: no-store`, security headers, body-size limits, input schemas,
   request throttling, and sanitized server errors.
 - Metadata-only audit trail for key, inbox, patient-record, relationship, and
   export events.
+- Structured clinical-draft output with evidence-entry ids, server-side schema
+  validation, `store: false`, and separate gates for mock-only versus live/PHI data.
+- No plaintext clinical report is persisted: the patient receives it transiently,
+  seals it to the selected doctor's public key, and uploads only ciphertext.
 - SQLite `secure_delete` plus WAL checkpointing after expiry cleanup. Because
   backups and storage snapshots may retain deleted blocks, short-lived inbox and
   export rows are additionally recipient-key encrypted.
@@ -64,9 +68,9 @@ boundaries.
    validate proxy headers only from trusted load balancers.
 5. Use TLS everywhere. For the MCP ingress, consider OpenAI client-certificate
    validation/mTLS in addition to end-user OAuth.
-6. Add consent receipts, scope/version history, revocation propagation, export
-   deletion UI, data-subject request workflows, and patient/doctor key-rotation
-   UX.
+6. Add signed consent receipts, scope/version history, data-subject request
+   workflows, and patient/doctor key-rotation and recovery UX. Relationship and
+   individual export revocation are implemented, but need product/legal review.
 7. Keep application, reverse-proxy, APM, analytics, support, and crash-reporting
    systems from recording authorization headers, bodies, query secrets, patient
    names, summaries, or decrypted reports.
@@ -81,12 +85,14 @@ boundaries.
 
 ## Browser versus native doctor key
 
-A non-extractable WebCrypto private key stored on a managed doctor's browser is
-useful, but JavaScript delivered by a compromised server can still read the
-decrypted report after decryption. A signed, independently update-controlled
-native doctor app with hardware-backed keys provides a cleaner “backend cannot
-decrypt” boundary. Either design needs key recovery/rotation policy; true
-zero-knowledge means lost private keys make old exports unrecoverable.
+The pilot doctor web stores an exportable P-256 private key string in that
+browser's IndexedDB and never sends it to the backend. This proves the backend-
+blind ciphertext flow, but it is not hardware-backed and remains accessible to
+same-origin JavaScript. Move to a non-extractable WebCrypto key on managed
+browsers, or preferably a signed native doctor app with hardware-backed keys,
+before real health data. JavaScript delivered by a compromised web server can
+still read a report after local decryption. Any design needs recovery/rotation
+policy; a lost private key intentionally makes its old exports unrecoverable.
 
 ## Regulatory posture
 

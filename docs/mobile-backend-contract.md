@@ -1,8 +1,8 @@
 # Patient mobile ↔ backend contract
 
-The patient app implements the device registration, sealed inbox pickup, local
-durability, patient-entry sync, and acknowledgement ordering below. The
-doctor-only export contract remains the next patient-app integration boundary.
+The patient app implements device registration, sealed inbox pickup, local
+durability, typed patient-entry sync, acknowledgement ordering, structured
+report generation, patient-side encryption, export listing, and revocation.
 
 ## Dependencies and shared code
 
@@ -53,7 +53,7 @@ those items are processed.
 ## 2. Receive a ChatGPT `new_entry`
 
 The MCP server seals each summary to the latest registered device and keeps the
-ciphertext for 15 minutes.
+ciphertext until that device durably saves and acknowledges it.
 
 1. Download without deleting:
 
@@ -83,6 +83,8 @@ Content-Type: application/json
 {
   "occurredAt": "2026-07-19T12:00:00.000Z",
   "kind": "chat_summary",
+  "source": "chatgpt_app_mcp",
+  "dataMode": "live",
   "payload": {
     "title": "…",
     "summary": "…",
@@ -104,8 +106,10 @@ silent loss. The stable record id/source inbox id makes retries idempotent.
 
 ## 3. Create a doctor-only export
 
-The export must be assembled and encrypted on the patient device. If the API
-assembles it, the API necessarily sees the plaintext.
+The structured draft is generated transiently by the API/LLM, but the export
+envelope must be assembled and encrypted on the patient device. The API sees
+the selected source data and draft during generation, then persists only the
+doctor-targeted ciphertext.
 
 1. Resolve the public key for the doctor in the active patient-consented care
    relationship:
@@ -116,7 +120,32 @@ Authorization: Bearer <patient access token with report:write>
 ```
 
 2. Generate a random `exportId`.
-3. Build the minimum report payload authorized by the patient's chosen scope.
+3. Ask the API for a structured report using the selected doctor, timeframe,
+   and source scope:
+
+```http
+POST /v1/patient/reports/generate
+Authorization: Bearer <patient access token with report:write>
+Content-Type: application/json
+
+{
+  "doctorId": "doctor OAuth subject",
+  "timeframeDays": 30,
+  "scope": {
+    "symptoms": true,
+    "wearables": true,
+    "treatments": true,
+    "conversations": true,
+    "proms": true
+  }
+}
+```
+
+The API and configured LLM necessarily see the selected source plaintext while
+generating this draft. HeyJule does not persist the plaintext report, and the
+OpenAI request sets `store: false`. Live entries are refused unless the separate
+provider privacy/PHI gate is enabled.
+
 4. Call `doctorExportEnvelopeContext(exportId, doctorKey.id)` and then
    `sealJson(report, doctorKey.publicKey, context, secureRandomBytes)`.
 5. Upload the returned envelope:
@@ -137,6 +166,10 @@ Content-Type: application/json
 
 The doctor client downloads the ciphertext from `/v1/exports/:id` and decrypts
 locally using the private key matching `doctorKeyId`.
+
+The patient lists active exports with `GET /v1/patient/exports` and deletes an
+individual export with `DELETE /v1/exports/:id`. Revoking the care relationship
+also immediately prevents doctor reads and downloads.
 
 ## Failure and recovery rules
 

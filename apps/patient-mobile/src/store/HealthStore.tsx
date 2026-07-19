@@ -1,4 +1,9 @@
 import * as Crypto from "expo-crypto";
+import type {
+  CareRelationship,
+  ClinicalReportScope,
+  DoctorExportMetadata,
+} from "@heyjule/shared-types";
 import {
   createContext,
   type PropsWithChildren,
@@ -14,20 +19,34 @@ import { AppState } from "react-native";
 import { useAuth } from "../auth/AuthProvider";
 import { appConfig } from "../lib/app-config";
 import { getOrCreateDeviceIdentity } from "../lib/device-identity";
+import { sealClinicalReportForDoctor } from "../lib/doctor-export";
 import { createHeyJuleApi } from "../lib/heyjule-api";
+import {
+  buildMockPatientEntries,
+  MOCK_PATIENT_DATASET_VERSION,
+  MOCK_PATIENT_PROFILE,
+} from "../lib/mock-patient-data";
 import { decryptInboxLog, logToPatientEntry } from "../lib/patient-sync";
 import { secureJournal } from "../lib/secure-journal";
-import type { ShareGrant, ShareScope, SymptomLog } from "../types";
+import type { SymptomLog } from "../types";
 
 type HealthStoreValue = {
   hydrated: boolean;
   logs: SymptomLog[];
-  grants: ShareGrant[];
+  careLinks: CareRelationship[];
+  doctorExports: DoctorExportMetadata[];
   backendStatus: "offline" | "syncing" | "synced" | "error";
   syncNow: () => Promise<void>;
+  claimCareInvite: (code: string) => Promise<{ doctorId: string; linkedAt: string }>;
+  revokeCareRelationship: (doctorId: string) => Promise<void>;
+  createDoctorExport: (
+    doctorId: string,
+    timeframeDays: 7 | 30 | 90,
+    scope: ClinicalReportScope,
+    durationDays: number,
+  ) => Promise<DoctorExportMetadata>;
+  revokeDoctorExport: (exportId: string) => Promise<void>;
   addLog: (entry: Omit<SymptomLog, "id" | "createdAt">) => Promise<void>;
-  createGrant: (scope: ShareScope, durationDays: number) => Promise<ShareGrant>;
-  revokeGrant: (id: string) => Promise<void>;
 };
 
 const HealthStoreContext = createContext<HealthStoreValue | null>(null);
@@ -36,21 +55,33 @@ function makeId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Crypto.randomUUID().replaceAll("-", "").slice(0, 10)}`;
 }
 
-async function makeCode() {
-  const bytes = await Crypto.getRandomBytesAsync(6);
-  return [0, 2, 4]
-    .map((index) => ((((bytes[index] ?? 0) << 8) | (bytes[index + 1] ?? 0)) % 900) + 100)
-    .join("-");
+async function ensureMockPatientData(api: ReturnType<typeof createHeyJuleApi>) {
+  if (!appConfig.mockDataEnabled) return;
+  const previous = await secureJournal.readMockSeed();
+  if (previous?.version === MOCK_PATIENT_DATASET_VERSION && previous.completed) return;
+  const anchorIso = previous?.anchorIso ?? new Date().toISOString();
+  await secureJournal.writeMockSeed({
+    version: MOCK_PATIENT_DATASET_VERSION,
+    anchorIso,
+    completed: false,
+  });
+  await api.putPatientProfile(MOCK_PATIENT_PROFILE);
+  for (const entry of buildMockPatientEntries(anchorIso)) await api.putPatientEntry(entry);
+  await secureJournal.writeMockSeed({
+    version: MOCK_PATIENT_DATASET_VERSION,
+    anchorIso,
+    completed: true,
+  });
 }
 
 export function HealthStoreProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
   const [hydrated, setHydrated] = useState(false);
   const [logs, setLogs] = useState<SymptomLog[]>([]);
-  const [grants, setGrants] = useState<ShareGrant[]>([]);
+  const [careLinks, setCareLinks] = useState<CareRelationship[]>([]);
+  const [doctorExports, setDoctorExports] = useState<DoctorExportMetadata[]>([]);
   const [backendStatus, setBackendStatus] = useState<HealthStoreValue["backendStatus"]>("offline");
   const logsRef = useRef<SymptomLog[]>([]);
-  const grantsRef = useRef<ShareGrant[]>([]);
   const syncingRef = useRef(false);
   const api = useMemo(() => createHeyJuleApi(auth.getAccessToken), [auth.getAccessToken]);
 
@@ -60,19 +91,11 @@ export function HealthStoreProvider({ children }: PropsWithChildren) {
     setLogs(next);
   }, []);
 
-  const persistGrants = useCallback(async (next: ShareGrant[]) => {
-    await secureJournal.writeGrants(next);
-    grantsRef.current = next;
-    setGrants(next);
-  }, []);
-
   useEffect(() => {
-    Promise.all([secureJournal.readLogs(), secureJournal.readGrants()])
-      .then(([nextLogs, nextGrants]) => {
+    secureJournal.readLogs()
+      .then((nextLogs) => {
         logsRef.current = nextLogs;
-        grantsRef.current = nextGrants;
         setLogs(nextLogs);
-        setGrants(nextGrants);
       })
       .finally(() => setHydrated(true));
   }, []);
@@ -102,6 +125,13 @@ export function HealthStoreProvider({ children }: PropsWithChildren) {
         setBackendStatus("error");
         return;
       }
+      await ensureMockPatientData(api);
+      const [relationships, exports] = await Promise.all([
+        api.listCareRelationships(),
+        api.listEncryptedExports(),
+      ]);
+      setCareLinks(relationships);
+      setDoctorExports(exports);
       const device = await getOrCreateDeviceIdentity();
       if (!device) {
         setBackendStatus("offline");
@@ -167,30 +197,60 @@ export function HealthStoreProvider({ children }: PropsWithChildren) {
     void syncNow();
   }, [persistLogs, syncNow]);
 
-  const createGrant = useCallback(async (scope: ShareScope, durationDays: number) => {
-    const expiresAt = new Date(Date.now() + durationDays * 86_400_000).toISOString();
-    const grant: ShareGrant = {
-      id: makeId("grant"),
-      code: await makeCode(),
-      expiresAt,
-      scope,
-      status: "active",
-    };
-    const next = [grant, ...grantsRef.current];
-    await persistGrants(next);
-    return grant;
-  }, [persistGrants]);
+  const claimCareInvite = useCallback(
+    async (code: string) => {
+      const relationship = await api.claimCareInvite(code.trim().toUpperCase());
+      setCareLinks((current) => [relationship, ...current.filter((item) => item.doctorId !== relationship.doctorId)]);
+      return relationship;
+    },
+    [api],
+  );
 
-  const revokeGrant = useCallback(async (id: string) => {
-    const next = grantsRef.current.map((grant) =>
-      grant.id === id ? { ...grant, status: "revoked" as const } : grant,
+  const revokeCareRelationship = useCallback(async (doctorId: string) => {
+    await api.revokeCareRelationship(doctorId);
+    setCareLinks((current) => current.filter((item) => item.doctorId !== doctorId));
+  }, [api]);
+
+  const createDoctorExport = useCallback(async (
+    doctorId: string,
+    timeframeDays: 7 | 30 | 90,
+    scope: ClinicalReportScope,
+    durationDays: number,
+  ) => {
+    const { report, doctorKey } = await api.generateClinicalReport({
+      doctorId,
+      timeframeDays,
+      scope,
+    });
+    const exportId = makeId("export");
+    const envelope = sealClinicalReportForDoctor(
+      report,
+      doctorKey,
+      exportId,
+      Crypto.getRandomBytes,
     );
-    await persistGrants(next);
-  }, [persistGrants]);
+    const receipt = await api.createEncryptedExport({
+      id: exportId,
+      doctorId,
+      doctorKeyId: doctorKey.id,
+      envelope,
+      expiresAt: new Date(Date.now() + durationDays * 86_400_000).toISOString(),
+    });
+    const updated = await api.listEncryptedExports();
+    setDoctorExports(updated);
+    const metadata = updated.find((item) => item.id === receipt.id);
+    if (!metadata) throw new Error("Created export was not returned by the API");
+    return metadata;
+  }, [api]);
+
+  const revokeDoctorExport = useCallback(async (exportId: string) => {
+    await api.revokeEncryptedExport(exportId);
+    setDoctorExports((current) => current.filter((item) => item.id !== exportId));
+  }, [api]);
 
   const value = useMemo(
-    () => ({ hydrated, logs, grants, backendStatus, syncNow, addLog, createGrant, revokeGrant }),
-    [addLog, backendStatus, createGrant, grants, hydrated, logs, revokeGrant, syncNow],
+    () => ({ hydrated, logs, careLinks, doctorExports, backendStatus, syncNow, addLog, claimCareInvite, revokeCareRelationship, createDoctorExport, revokeDoctorExport }),
+    [addLog, backendStatus, careLinks, claimCareInvite, createDoctorExport, doctorExports, hydrated, logs, revokeCareRelationship, revokeDoctorExport, syncNow],
   );
 
   return <HealthStoreContext.Provider value={value}>{children}</HealthStoreContext.Provider>;

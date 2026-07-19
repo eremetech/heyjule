@@ -403,7 +403,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
               style={styles.secondaryCircle}
               accessibilityLabel="Write instead"
             >
-              <Ionicons name="keypad-outline" size={22} color={colors.inkSoft} />
+              <Ionicons name="keypad-outline" size={22} color={colors.coralVivid} />
             </SoftPressable>
             <SoftPressable
               onPress={voiceActive ? stopRecording : startRecording}

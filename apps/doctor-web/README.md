@@ -1,104 +1,74 @@
 # @heyjule/doctor-web
 
-Doctor-facing web app: sign in, link patients via invite codes, and read each
-patient's brief — a summary of their symptom history (voice logs, messages,
-ChatGPT-conversation summaries) plus 14 days of wearable data. The report also
-has an optional OpenAI-powered, report-grounded chat assistant.
+Doctor-facing Next.js app for creating patient invite codes, reading the
+consented patient timeline, and opening patient-encrypted AI clinical drafts.
 
-Next.js (App Router) with its own backend: route handlers + server actions,
-[Better Auth](https://better-auth.com) for email/password sessions, and SQLite
-(`better-sqlite3`) for storage. OpenAI is only required for report chat.
+## Production data boundary
 
-## Setup
+The dashboard does not read health data from its local SQLite database. Its
+database contains only Better Auth users, accounts, sessions, and JWT signing
+keys. Patient profiles, entries, invite state, care relationships, encrypted
+exports, and audit events live behind `services/api`.
+
+After validating the browser session, the server obtains a short-lived ES256
+JWT from Better Auth and calls the API over the private deployment network. The
+token is bound to `HEYJULE_API_URL`; the API validates issuer, audience,
+signature, doctor role, and operation scope before checking the active care
+relationship.
+
+On first authenticated use, the browser creates a P-256 export key, keeps the
+private key in IndexedDB, and registers only the public key through the API.
+Encrypted reports are downloaded by the authenticated Next.js server but are
+opened only in the browser. Clearing browser storage intentionally makes reports
+for that key unrecoverable; production still needs managed, non-extractable or
+hardware-backed keys and a reviewed recovery/rotation policy.
+
+## Local setup
+
+Run `services/api` first, then configure:
+
+```dotenv
+BETTER_AUTH_SECRET=<openssl rand -base64 48>
+BETTER_AUTH_URL=http://localhost:3000
+DATABASE_PATH=./data/identity.db
+HEYJULE_API_URL=http://localhost:8787
+HEYJULE_INTERNAL_API_URL=http://localhost:8787
+```
+
+The API must include this app as its optional doctor issuer:
+
+```dotenv
+HEYJULE_DOCTOR_OAUTH_ISSUER=http://localhost:3000
+HEYJULE_DOCTOR_OAUTH_AUDIENCE=http://localhost:8787
+HEYJULE_DOCTOR_OAUTH_JWKS_URL=http://localhost:3000/api/auth/jwks
+```
+
+Then run:
 
 ```bash
-cp .env.example .env.local        # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
-                                     # and OPENAI_API_KEY to test the real chatbot
-pnpm db:migrate                   # creates the Better Auth tables in ./data/heyjule.db
-pnpm seed                         # demo doctor + 2 linked patients with data
-pnpm dev                          # http://localhost:3000
+pnpm --filter @heyjule/doctor-web dev
 ```
 
-Demo sign-in after seeding: `demo.doctor@heyjule.dev` / `jule-demo-password`.
+The identity schema is created idempotently on first boot. The real care-link
+flow is:
 
-## QR report flow (the frictionless path)
+1. Doctor creates an invite in the dashboard.
+2. Patient opens **Share with your doctor → Link clinician**, enters the six-character code, and confirms.
+3. The API consumes the single-use invite and activates the relationship.
+4. Synchronized patient entries appear in the doctor's timeline.
+5. Patient chooses the report window and sources. The API asks the configured
+   LLM for a structured draft, and the patient app seals it to the browser key.
+6. The doctor opens the encrypted report; decryption and report rendering happen
+   locally in the browser.
+7. Patient export or relationship revocation immediately removes API access.
 
-The seed also prints a **report link** (`/r/<token>`) — the expiring,
-patient-scoped URL that would be embedded in the EPR PDF. Opening it shows a
-QR gate ("Sign in to view <patient>'s data"); scanning the QR (or opening the
-`/approve/<channel>` URL it encodes) simulates the phone-side approval, and the
-desktop tab signs itself in. The viewer session is a browser-session cookie
-bound to that one report link, capped at 30 minutes server-side. Design and
-production plan: [`docs/frictionless-signin.md`](../../docs/frictionless-signin.md).
+## Legacy visual report prototype
 
-On localhost your phone can't reach the QR URL — open the encoded
-`/approve/…` link in a second tab instead, or run `next dev -H 0.0.0.0` and use
-your LAN IP. In development, the QR gate includes an **Open mock phone
-approval** shortcut that opens the matching `/approve/…` page in a second tab.
+The earlier `/r/*` QR report prototype and its mock tables are disabled by
+default and are not created in the production Compose deployment. For isolated
+UI development only, set `HEYJULE_ENABLE_LEGACY_REPORTS=true`, run `db:migrate`
+and `seed`, and never mix that mock database with real patient data.
 
-The report opens with a **noteworthy strip** (computed deviation flags — see
-`src/lib/insights.ts`), a collapsed one-line summary, PROM sections rendered
-per instrument (MRS, ISI, … — fully data-driven), treatments labeled with
-their EPR import source, and wearable tiles. PROM history sparklines and the
-wearable tiles click through to full-page interactive charts
-(`/r/<token>/prom/<item>` and `/r/<token>/wearables`) with crosshair tooltips,
-symptom/patient-note markers, and treatment-start lines.
-
-## Report chat
-
-The collapsible chat dock uses Vercel AI SDK 6 and the direct OpenAI Responses
-provider. It streams answers from `POST /api/report-chat`. The browser sends the
-report token plus the visible text conversation; the route re-authorizes the
-QR viewer session for that exact report and loads report data from SQLite. It
-does not accept report context from the browser and does not persist chats.
-
-The model payload excludes dedicated name, date-of-birth, database-ID, and
-report-token fields; known name/DOB variants are also redacted from free text.
-It contains the report's age/sex demographics, flags, brief,
-PROMs, treatments, wearables, and symptoms. Requests are text-only, size- and
-length-limited, best-effort rate-limited, same-origin checked, and sent with
-OpenAI `store: false`. AI-generated Markdown is rendered with AI Elements.
-
-`store: false` is not equivalent to Zero Data Retention. In production the
-route stays disabled until `OPENAI_PHI_ENABLED=true`; only set that after the
-OpenAI project and deployment have been approved for the intended health-data
-workflow, including any required BAA and retention configuration. See OpenAI's
-[data controls](https://developers.openai.com/api/docs/guides/your-data) and
-have the final data flow reviewed by your privacy/security owner.
-
-## Security model
-
-- **Session auth** — Better Auth email/password (12-char minimum), 7-day
-  httpOnly session cookies, secure cookies when served over https, built-in
-  rate limiting on auth endpoints.
-- **Middleware** redirects unauthenticated requests optimistically; the real
-  check is `requireDoctor()` in every protected layout, page, and server action.
-- **Scoped reads** — all patient data resolves through `patient_links` with an
-  `active` (consented) link for the requesting doctor. A patient id in the URL
-  is never trusted on its own; an unlinked doctor gets a 404.
-- **Scoped report chat** — every request re-validates the short-lived viewer
-  session against the report link, builds model context server-side, strips
-  direct identifiers, and never stores the conversation in the application DB.
-- **Consent flow** — the doctor generates a one-off invite code; the patient
-  claims it in the mobile app to activate the link. Codes are revocable while
-  pending, and links are revocable by the patient (`status = 'revoked'`).
-- **Headers** — nosniff, frame denial, strict referrer policy, and (in
-  production) HSTS + a restrictive Content-Security-Policy.
-
-> Open sign-up is on for development. Gate doctor registration (invite-only or
-> verified-identity onboarding) before any real deployment, and move the domain
-> tables behind `services/api` when the shared connection layer lands.
-
-## Layout
-
-```
-src/
-├── app/
-│   ├── (auth)/            # sign-in, sign-up
-│   ├── (app)/             # authed shell: dashboard, patient briefs, actions
-│   └── api/auth/[...all]/ # Better Auth handler
-├── components/            # sparkline, sign-out
-├── lib/                   # auth config, auth client, db + scoped queries, session gate
-└── middleware.ts
-scripts/seed.ts            # demo data
-```
+Open doctor registration remains suitable only for development. Production
+onboarding must be restricted to verified clinicians before real health data is
+used.

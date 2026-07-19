@@ -1,88 +1,154 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { QRCode } from "../components/QRCode";
 import { SoftPressable } from "../components/SoftPressable";
+import { ApiError } from "../lib/heyjule-api";
 import { useHealthStore } from "../store/HealthStore";
 import { colors, shadows, typography } from "../theme";
-import type { ShareGrant, ShareScope } from "../types";
+import type { DoctorExportMetadata } from "@heyjule/shared-types";
+import type { ShareScope } from "../types";
 
 type ShareScreenProps = {
   onClose: () => void;
 };
 
-type Mode = "menu" | "show" | "scan";
+type Mode = "menu" | "scan" | "export";
 
-const RANGES = ["7 days", "30 days", "90 days"] as const;
+const RANGES = [
+  { label: "7 days", days: 7 as const },
+  { label: "30 days", days: 30 as const },
+  { label: "90 days", days: 90 as const },
+];
 
 const VALIDITY = [
-  { label: "1 hour", days: 1 / 24 },
   { label: "24 hours", days: 1 },
   { label: "7 days", days: 7 },
+  { label: "30 days", days: 30 },
 ] as const;
 
 const SOURCES: { key: keyof ShareScope; label: string }[] = [
   { key: "symptoms", label: "Symptoms" },
   { key: "wearables", label: "Wearables" },
+  { key: "proms", label: "PROMs" },
   { key: "treatments", label: "Treatments" },
   { key: "conversations", label: "Conversations" },
 ];
 
-function countdownParts(expiresAt: string) {
+function countdown(expiresAt: string) {
   const left = Math.max(0, new Date(expiresAt).getTime() - Date.now());
   const hours = Math.floor(left / 3_600_000);
   const minutes = Math.floor((left % 3_600_000) / 60_000);
-  const seconds = Math.floor((left % 60_000) / 1000);
-  return { hours, minutes, seconds };
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function exportError(error: unknown) {
+  if (!(error instanceof ApiError)) return "The encrypted report could not be created.";
+  if (error.code === "doctor_key_not_found") {
+    return "The clinician must open their HeyJule portal once so a browser encryption key can be registered.";
+  }
+  if (error.code === "report_provider_not_configured") {
+    return "The report model is not configured on the HeyJule server.";
+  }
+  if (error.code === "mock_llm_not_enabled") {
+    return "Mock-data model review is disabled on the HeyJule server.";
+  }
+  if (error.code === "openai_phi_not_enabled") {
+    return "Live health-data review is locked until the approved provider privacy gate is enabled.";
+  }
+  if (error.code === "report_provider_failed") {
+    return "The model did not return a usable structured report. Try again.";
+  }
+  return "The encrypted report could not be created.";
 }
 
 export function ShareScreen({ onClose }: ShareScreenProps) {
   const insets = useSafeAreaInsets();
-  const { grants, createGrant, revokeGrant } = useHealthStore();
+  const {
+    careLinks,
+    doctorExports,
+    claimCareInvite,
+    revokeCareRelationship,
+    createDoctorExport,
+    revokeDoctorExport,
+  } = useHealthStore();
   const [mode, setMode] = useState<Mode>("menu");
-  const [range, setRange] = useState<(typeof RANGES)[number]>("30 days");
+  const [rangeDays, setRangeDays] = useState<7 | 30 | 90>(30);
   const [validity, setValidity] = useState<(typeof VALIDITY)[number]>(VALIDITY[1]);
   const [scope, setScope] = useState<ShareScope>({
     symptoms: true,
     wearables: true,
     treatments: true,
-    conversations: false,
+    conversations: true,
+    proms: true,
   });
+  const [selectedDoctorId, setSelectedDoctorId] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [claiming, setClaiming] = useState(false);
   const [creating, setCreating] = useState(false);
   const [, setTick] = useState(0);
 
-  // countdown tick for active shares
   useEffect(() => {
-    const timer = setInterval(() => setTick((n) => n + 1), 1000);
+    const timer = setInterval(() => setTick((value) => value + 1), 60_000);
     return () => clearInterval(timer);
   }, []);
 
   const included = SOURCES.filter((source) => scope[source.key]);
-  const activeGrants = grants.filter(
-    (grant) => grant.status === "active" && new Date(grant.expiresAt).getTime() > Date.now(),
+  const activeExports = doctorExports.filter(
+    (item) => new Date(item.expiresAt).getTime() > Date.now(),
   );
-  const scopeSummary = `${range} · ${
-    included.map((source) => source.label.toLowerCase()).join(" · ") || "no sources"
-  } · expires in ${validity.label}`;
+
+  function openExport(doctorId?: string) {
+    const nextDoctorId = doctorId ?? careLinks[0]?.doctorId;
+    if (!nextDoctorId) {
+      Alert.alert("Link a clinician first", "Enter the six-character code from their portal.");
+      return;
+    }
+    setSelectedDoctorId(nextDoctorId);
+    setMode("export");
+  }
 
   function toggleSource(key: keyof ShareScope) {
     void Haptics.selectionAsync();
     setScope((current) => ({ ...current, [key]: !current[key] }));
   }
 
-  async function generate() {
-    if (included.length === 0) {
-      Alert.alert("Choose something to share", "Select at least one source for your doctor.");
+  async function claimInvite() {
+    if (!/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/u.test(inviteCode)) {
+      Alert.alert("Check the code", "Enter the six-character code shown by your clinician.");
+      return;
+    }
+    setClaiming(true);
+    try {
+      const relationship = await claimCareInvite(inviteCode);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setInviteCode("");
+      openExport(relationship.doctorId);
+    } catch {
+      Alert.alert("Code not accepted", "The code may be invalid, expired, or already used.");
+    } finally {
+      setClaiming(false);
+    }
+  }
+
+  async function generateExport() {
+    if (!selectedDoctorId || included.length === 0) {
+      Alert.alert("Choose data to share", "Select a clinician and at least one source.");
       return;
     }
     setCreating(true);
     try {
-      await createGrant(scope, validity.days);
+      await createDoctorExport(selectedDoctorId, rangeDays, scope, validity.days);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        "Encrypted report sent",
+        "The model-generated draft was encrypted to this clinician’s browser key before it was stored.",
+      );
       setMode("menu");
+    } catch (error) {
+      Alert.alert("Report not sent", exportError(error));
     } finally {
       setCreating(false);
     }
@@ -96,12 +162,10 @@ export function ShareScreen({ onClose }: ShareScreenProps) {
         </SoftPressable>
         <Text style={styles.headerTitle}>Share with your doctor</Text>
         <SoftPressable
-          onPress={() =>
-            Alert.alert(
-              "Your privacy",
-              "You choose what leaves this device. Every share is scoped, expires, and can be revoked.",
-            )
-          }
+          onPress={() => Alert.alert(
+            "How this export works",
+            "HeyJule sends only the selected data to the configured model for a structured draft. The patient app then encrypts that draft to the clinician’s browser key. The stored export is ciphertext and expires automatically.",
+          )}
           style={styles.roundButton}
           accessibilityLabel="Privacy information"
         >
@@ -114,74 +178,137 @@ export function ShareScreen({ onClose }: ShareScreenProps) {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 36 }]}
       >
         <View style={styles.intro}>
+          <Text style={styles.eyebrow}>DEMO PATIENT DATA</Text>
           <Text style={styles.displayCopy}>
-            Show a code or scan theirs. Every share is scoped before it exists.
+            Link a clinician, choose the record window, then create an AI-reviewed report encrypted only for them.
           </Text>
         </View>
 
         {mode === "menu" ? (
           <>
             <View style={styles.doorRow}>
+              <SoftPressable onPress={() => setMode("scan")} style={styles.door} accessibilityRole="button">
+                <View style={styles.doorIcon}>
+                  <Ionicons name="keypad-outline" size={25} color={colors.ink} />
+                </View>
+                <Text style={styles.doorTitle}>Link clinician</Text>
+                <Text style={styles.doorSub}>Enter their one-time consent code</Text>
+              </SoftPressable>
               <SoftPressable
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  setMode("show");
-                }}
+                onPress={() => openExport()}
                 style={[styles.door, styles.doorPrimary]}
                 accessibilityRole="button"
               >
                 <View style={styles.doorIcon}>
-                  <Ionicons name="qr-code-outline" size={25} color={colors.ink} />
+                  <Ionicons name="lock-closed-outline" size={25} color={colors.ink} />
                 </View>
-                <Text style={styles.doorTitle}>Show my code</Text>
-                <Text style={styles.doorSub}>They scan, the record opens read-only</Text>
-              </SoftPressable>
-              <SoftPressable
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  setMode("scan");
-                }}
-                style={styles.door}
-                accessibilityRole="button"
-              >
-                <View style={styles.doorIcon}>
-                  <Ionicons name="scan-outline" size={25} color={colors.ink} />
-                </View>
-                <Text style={styles.doorTitle}>Scan theirs</Text>
-                <Text style={styles.doorSub}>Send a scoped summary to their screen</Text>
+                <Text style={styles.doorTitle}>Create report</Text>
+                <Text style={styles.doorSub}>Review with the LLM, then encrypt for the doctor</Text>
               </SoftPressable>
             </View>
 
-            <Text style={styles.sectionLabel}>ACTIVE SHARES</Text>
-            {activeGrants.map((grant) => (
-              <GrantCard key={grant.id} grant={grant} onRevoke={() => void revokeGrant(grant.id)} />
+            <Text style={styles.sectionLabel}>ENCRYPTED EXPORTS</Text>
+            {activeExports.map((value) => (
+              <ExportCard
+                key={value.id}
+                value={value}
+                onRevoke={() => void revokeDoctorExport(value.id)}
+              />
             ))}
-            {activeGrants.length === 0 ? (
-              <Text style={styles.emptyShares}>None — your record is only on this device.</Text>
+            {activeExports.length === 0 ? (
+              <Text style={styles.emptyShares}>No active encrypted reports.</Text>
             ) : null}
+
+            <Text style={[styles.sectionLabel, styles.linkedLabel]}>LINKED CLINICIANS</Text>
+            {careLinks.map((relationship) => (
+              <View key={relationship.doctorId} style={styles.card}>
+                <View style={styles.cardCopy}>
+                  <Text style={styles.cardTitle}>Clinician</Text>
+                  <Text style={styles.cardDetail}>{relationship.doctorId}</Text>
+                </View>
+                <View style={styles.cardActions}>
+                  <SoftPressable onPress={() => openExport(relationship.doctorId)} style={styles.sendButton}>
+                    <Text style={styles.sendText}>Report</Text>
+                  </SoftPressable>
+                  <SoftPressable
+                    onPress={() => Alert.alert(
+                      "Revoke clinician access?",
+                      "New dashboard reads and encrypted-export downloads will be denied immediately.",
+                      [
+                        { text: "Keep access", style: "cancel" },
+                        { text: "Revoke", style: "destructive", onPress: () => void revokeCareRelationship(relationship.doctorId) },
+                      ],
+                    )}
+                    style={styles.revokeButton}
+                  >
+                    <Text style={styles.revokeText}>Revoke</Text>
+                  </SoftPressable>
+                </View>
+              </View>
+            ))}
+            {careLinks.length === 0 ? <Text style={styles.emptyShares}>No clinicians linked.</Text> : null}
           </>
         ) : null}
 
-        {mode === "show" ? (
+        {mode === "scan" ? (
           <>
-            <Text style={styles.sectionLabel}>SCOPE — SET BEFORE THE CODE EXISTS</Text>
+            <View style={styles.scannerBox}>
+              <Ionicons name="link-outline" size={32} color="rgba(255,255,255,0.82)" />
+              <Text style={styles.scannerText}>Enter the clinician’s code</Text>
+              <Text style={styles.scannerSub}>This creates a revocable care relationship. It does not send a report yet.</Text>
+              <TextInput
+                value={inviteCode}
+                onChangeText={(value) => setInviteCode(
+                  value.toUpperCase().replace(/[^23456789ABCDEFGHJKLMNPQRSTUVWXYZ]/gu, "").slice(0, 6),
+                )}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={6}
+                placeholder="ABC234"
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                style={styles.inviteInput}
+                accessibilityLabel="Clinician invite code"
+              />
+            </View>
+            <SoftPressable
+              onPress={() => void claimInvite()}
+              disabled={claiming}
+              style={[styles.primaryButton, claiming && styles.disabled]}
+            >
+              <Text style={styles.primaryButtonText}>{claiming ? "Linking…" : "Confirm clinician link"}</Text>
+            </SoftPressable>
+            <BackButton onPress={() => setMode("menu")} />
+          </>
+        ) : null}
 
-            <Text style={styles.controlLabel}>Date range</Text>
+        {mode === "export" ? (
+          <>
+            <Text style={styles.sectionLabel}>ENCRYPTED REPORT SETTINGS</Text>
+            <Text style={styles.controlLabel}>Clinician</Text>
             <View style={styles.chipRow}>
-              {RANGES.map((item) => (
+              {careLinks.map((relationship) => (
                 <Chip
-                  key={item}
-                  label={item}
-                  on={range === item}
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    setRange(item);
-                  }}
+                  key={relationship.doctorId}
+                  label={relationship.doctorId}
+                  on={selectedDoctorId === relationship.doctorId}
+                  onPress={() => setSelectedDoctorId(relationship.doctorId)}
                 />
               ))}
             </View>
 
-            <Text style={styles.controlLabel}>Sources included</Text>
+            <Text style={styles.controlLabel}>Record window</Text>
+            <View style={styles.chipRow}>
+              {RANGES.map((range) => (
+                <Chip
+                  key={range.days}
+                  label={range.label}
+                  on={rangeDays === range.days}
+                  onPress={() => setRangeDays(range.days)}
+                />
+              ))}
+            </View>
+
+            <Text style={styles.controlLabel}>Sources sent for review</Text>
             <View style={styles.chipRow}>
               {SOURCES.map((source) => (
                 <Chip
@@ -193,74 +320,33 @@ export function ShareScreen({ onClose }: ShareScreenProps) {
               ))}
             </View>
 
-            <Text style={styles.controlLabel}>Valid for</Text>
+            <Text style={styles.controlLabel}>Encrypted export expires after</Text>
             <View style={styles.chipRow}>
               {VALIDITY.map((item) => (
                 <Chip
                   key={item.label}
                   label={item.label}
                   on={validity.label === item.label}
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    setValidity(item);
-                  }}
+                  onPress={() => setValidity(item)}
                 />
               ))}
             </View>
 
-            <View style={styles.qrFrame}>
-              <Text style={styles.frameText} numberOfLines={1}>
-                {scopeSummary}
-              </Text>
-              <View style={styles.qrRow}>
-                <View style={styles.frameVerticalWrap}>
-                  <Text style={[styles.frameText, styles.frameVertical]} numberOfLines={1}>
-                    read-only · expires · revocable
-                  </Text>
-                </View>
-                <View style={styles.qrBox}>
-                  <QRCode seed={scopeSummary} size={210} color={colors.ink} background={colors.white} />
-                </View>
-                <View style={styles.frameVerticalWrap}>
-                  <Text style={[styles.frameText, styles.frameVertical]} numberOfLines={1}>
-                    scoped by you · before it left
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.frameText} numberOfLines={1}>
-                {included.length} sources · {range} · {validity.label}
+            <View style={styles.flowNote}>
+              <Ionicons name="sparkles-outline" size={21} color={colors.oliveDeep} />
+              <Text style={styles.flowNoteText}>
+                {included.length} selected sources → structured model review → patient-device encryption → expiring doctor export
               </Text>
             </View>
 
             <SoftPressable
-              onPress={generate}
+              onPress={() => void generateExport()}
               disabled={creating}
-              style={[styles.primaryButton, creating && styles.primaryButtonDisabled]}
-              accessibilityRole="button"
+              style={[styles.primaryButton, creating && styles.disabled]}
             >
-              <Text style={styles.primaryButtonText}>
-                {creating ? "Creating…" : "Generate & start countdown"}
-              </Text>
+              <Text style={styles.primaryButtonText}>{creating ? "Reviewing & encrypting…" : "Create encrypted report"}</Text>
             </SoftPressable>
-            <SoftPressable onPress={() => setMode("menu")} style={styles.backLink}>
-              <Text style={styles.backLinkText}>‹ Back</Text>
-            </SoftPressable>
-          </>
-        ) : null}
-
-        {mode === "scan" ? (
-          <>
-            <View style={styles.scannerBox}>
-              <View style={styles.scannerCorner} />
-              <View style={[styles.scannerCorner, styles.cornerTR]} />
-              <View style={[styles.scannerCorner, styles.cornerBL]} />
-              <View style={[styles.scannerCorner, styles.cornerBR]} />
-              <Text style={styles.scannerText}>Point at the clinician’s code</Text>
-              <Text style={styles.scannerSub}>Camera opens here — UI only for now</Text>
-            </View>
-            <SoftPressable onPress={() => setMode("menu")} style={styles.backLink}>
-              <Text style={styles.backLinkText}>‹ Back</Text>
-            </SoftPressable>
+            <BackButton onPress={() => setMode("menu")} />
           </>
         ) : null}
       </ScrollView>
@@ -281,25 +367,37 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
   );
 }
 
-function GrantCard({ grant, onRevoke }: { grant: ShareGrant; onRevoke: () => void }) {
-  const { hours, minutes, seconds } = countdownParts(grant.expiresAt);
-  const scopeCount = Object.values(grant.scope).filter(Boolean).length;
+function BackButton({ onPress }: { onPress: () => void }) {
   return (
-    <View style={styles.grantCard}>
-      <View style={styles.grantCopy}>
-        <Text style={styles.grantRecipient}>Code {grant.code}</Text>
-        <Text style={styles.grantScope}>{scopeCount} sources · read-only</Text>
-        <Text style={styles.grantCountdown}>
-          Expires in {hours}h {String(minutes).padStart(2, "0")}m {String(seconds).padStart(2, "0")}s
-        </Text>
+    <SoftPressable onPress={onPress} style={styles.backLink}>
+      <Text style={styles.backLinkText}>‹ Back</Text>
+    </SoftPressable>
+  );
+}
+
+function ExportCard({
+  value,
+  onRevoke,
+}: {
+  value: DoctorExportMetadata;
+  onRevoke: () => void;
+}) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardCopy}>
+        <Text style={styles.cardTitle}>Encrypted for clinician</Text>
+        <Text style={styles.cardDetail}>{value.doctorId}</Text>
+        <Text style={styles.countdown}>Expires in {countdown(value.expiresAt)}</Text>
       </View>
       <SoftPressable
-        onPress={() =>
-          Alert.alert("Revoke this access?", "The share will stop working immediately.", [
-            { text: "Keep access", style: "cancel" },
+        onPress={() => Alert.alert(
+          "Revoke this export?",
+          "The ciphertext will be deleted and the clinician will no longer be able to download it.",
+          [
+            { text: "Keep", style: "cancel" },
             { text: "Revoke", style: "destructive", onPress: onRevoke },
-          ])
-        }
+          ],
+        )}
         style={styles.revokeButton}
       >
         <Text style={styles.revokeText}>Revoke</Text>
@@ -309,10 +407,7 @@ function GrantCard({ grant, onRevoke }: { grant: ShareGrant; onRevoke: () => voi
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.canvas,
-  },
+  screen: { flex: 1, backgroundColor: colors.canvas },
   header: {
     height: 58,
     paddingHorizontal: 18,
@@ -320,56 +415,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  roundButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    color: colors.ink,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-  },
-  intro: {
-    paddingTop: 32,
-    paddingBottom: 30,
-  },
-  displayTitle: {
-    fontFamily: typography.display,
-    color: colors.ink,
-    fontSize: 43,
-    lineHeight: 47,
-    letterSpacing: -1.1,
+  roundButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  headerTitle: { color: colors.ink, fontSize: 16, fontWeight: "600" },
+  scrollContent: { paddingHorizontal: 24 },
+  intro: { paddingTop: 28, paddingBottom: 28 },
+  eyebrow: {
+    color: colors.oliveDeep,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    marginBottom: 10,
   },
   displayCopy: {
-    color: colors.inkFaint,
-    fontSize: 16,
-    lineHeight: 23,
-    marginTop: 12,
-    maxWidth: 340,
+    color: colors.ink,
+    fontFamily: typography.display,
+    fontSize: 29,
+    lineHeight: 35,
+    letterSpacing: -0.7,
   },
-  doorRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 30,
-  },
+  doorRow: { flexDirection: "row", gap: 12, marginBottom: 30 },
   door: {
     flex: 1,
-    minHeight: 156,
+    minHeight: 166,
     borderRadius: 24,
-    padding: 20,
+    padding: 19,
     backgroundColor: "rgba(255,255,255,0.64)",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
     ...shadows.quiet,
   },
-  doorPrimary: {
-    backgroundColor: "rgba(245,200,190,0.4)",
-  },
+  doorPrimary: { backgroundColor: "rgba(245,200,190,0.4)" },
   doorIcon: {
     width: 46,
     height: 46,
@@ -382,15 +457,10 @@ const styles = StyleSheet.create({
   doorTitle: {
     fontFamily: typography.displayMedium,
     color: colors.ink,
-    fontSize: 22,
+    fontSize: 21,
     letterSpacing: -0.5,
   },
-  doorSub: {
-    color: colors.inkSoft,
-    fontSize: 12.5,
-    lineHeight: 17,
-    marginTop: 6,
-  },
+  doorSub: { color: colors.inkSoft, fontSize: 12.5, lineHeight: 17, marginTop: 6 },
   sectionLabel: {
     color: colors.inkFaint,
     fontSize: 12,
@@ -398,200 +468,95 @@ const styles = StyleSheet.create({
     letterSpacing: 1.3,
     marginBottom: 12,
   },
-  controlLabel: {
-    color: colors.oliveDeep,
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 5,
-  },
-  chipRow: {
+  linkedLabel: { marginTop: 28 },
+  emptyShares: { color: colors.inkFaint, fontSize: 14, paddingVertical: 9 },
+  card: {
+    minHeight: 86,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 10,
+    backgroundColor: "rgba(255,255,255,0.68)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 17,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
+  cardCopy: { flex: 1 },
+  cardTitle: { color: colors.ink, fontSize: 15, fontWeight: "600" },
+  cardDetail: { color: colors.inkFaint, fontSize: 12, marginTop: 3 },
+  countdown: { color: colors.oliveDeep, fontSize: 12, fontWeight: "600", marginTop: 5 },
+  cardActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  sendButton: { borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: colors.ink },
+  sendText: { color: colors.canvas, fontSize: 12, fontWeight: "700" },
+  revokeButton: { paddingVertical: 8, paddingHorizontal: 9 },
+  revokeText: { color: colors.coral, fontSize: 12.5, fontWeight: "600" },
+  scannerBox: {
+    minHeight: 280,
+    borderRadius: 28,
+    padding: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.ink,
+    marginBottom: 18,
+  },
+  scannerText: { color: colors.white, fontSize: 20, fontWeight: "600", marginTop: 14 },
+  scannerSub: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    marginTop: 7,
+    maxWidth: 270,
+  },
+  inviteInput: {
+    width: 210,
+    color: colors.white,
+    borderColor: "rgba(255,255,255,0.24)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+    fontSize: 26,
+    fontWeight: "700",
+    letterSpacing: 7,
+    textAlign: "center",
+    marginTop: 22,
+  },
+  controlLabel: { color: colors.oliveDeep, fontSize: 14, fontWeight: "600", marginBottom: 8 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 18 },
   chip: {
     borderRadius: 999,
     paddingVertical: 10,
-    paddingHorizontal: 17,
+    paddingHorizontal: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.lineStrong,
     backgroundColor: "rgba(255,255,255,0.5)",
   },
-  chipOn: {
-    borderColor: colors.olive,
-    backgroundColor: "rgba(136,148,96,0.14)",
-  },
-  chipText: {
-    color: colors.inkFaint,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  chipTextOn: {
-    color: colors.oliveDeep,
-  },
-  qrFrame: {
-    alignSelf: "center",
-    alignItems: "center",
-    marginVertical: 19,
-    gap: 8,
-  },
-  qrRow: {
+  chipOn: { borderColor: colors.olive, backgroundColor: "rgba(136,148,96,0.14)" },
+  chipText: { color: colors.inkFaint, fontSize: 13.5, fontWeight: "600" },
+  chipTextOn: { color: colors.oliveDeep },
+  flowNote: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: "rgba(136,148,96,0.12)",
+    marginVertical: 8,
   },
-  frameText: {
-    color: colors.inkFaint,
-    fontSize: 10.5,
-    letterSpacing: 0.6,
-    maxWidth: 300,
-  },
-  frameVerticalWrap: {
-    width: 20,
-    height: 234,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  frameVertical: {
-    width: 234,
-    textAlign: "center",
-    transform: [{ rotate: "-90deg" }],
-  },
-  qrBox: {
-    padding: 12,
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    ...shadows.quiet,
-  },
+  flowNoteText: { flex: 1, color: colors.inkSoft, fontSize: 13, lineHeight: 19 },
   primaryButton: {
-    height: 62,
-    borderRadius: 31,
-    marginTop: 5,
+    minHeight: 54,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.olive,
-    ...shadows.lifted,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  backLink: {
-    alignSelf: "center",
-    marginTop: 16,
-    padding: 10,
-  },
-  backLinkText: {
-    color: colors.inkFaint,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  emptyShares: {
-    color: colors.inkFaint,
-    fontSize: 15,
-    lineHeight: 22,
-    fontStyle: "italic",
-  },
-  grantCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 24,
-    padding: 19,
-    marginBottom: 12,
-    backgroundColor: "rgba(255,255,255,0.64)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
-  grantCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  grantRecipient: {
-    fontFamily: typography.displayMedium,
-    color: colors.ink,
-    fontSize: 19,
-    letterSpacing: 0.5,
-  },
-  grantScope: {
-    color: colors.inkFaint,
-    fontSize: 13,
-  },
-  grantCountdown: {
-    color: colors.oliveDeep,
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-  revokeButton: {
-    height: 44,
-    paddingHorizontal: 18,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.lineStrong,
-  },
-  revokeText: {
-    color: colors.coral,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  scannerBox: {
-    height: 290,
-    borderRadius: 24,
     backgroundColor: colors.ink,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
+    marginTop: 15,
   },
-  scannerCorner: {
-    position: "absolute",
-    top: 21,
-    left: 21,
-    width: 31,
-    height: 31,
-    borderLeftWidth: 2.5,
-    borderTopWidth: 2.5,
-    borderColor: colors.coralSoft,
-  },
-  cornerTR: {
-    left: undefined,
-    right: 21,
-    borderLeftWidth: 0,
-    borderRightWidth: 2.5,
-  },
-  cornerBL: {
-    top: undefined,
-    bottom: 21,
-    borderTopWidth: 0,
-    borderBottomWidth: 2.5,
-  },
-  cornerBR: {
-    top: undefined,
-    left: undefined,
-    right: 21,
-    bottom: 21,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderRightWidth: 2.5,
-    borderBottomWidth: 2.5,
-  },
-  scannerText: {
-    color: colors.white,
-    fontSize: 18,
-    fontFamily: typography.displayMedium,
-  },
-  scannerSub: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 12,
-    marginTop: 7,
-  },
+  primaryButtonText: { color: colors.canvas, fontSize: 15, fontWeight: "700" },
+  disabled: { opacity: 0.55 },
+  backLink: { alignSelf: "center", padding: 18 },
+  backLinkText: { color: colors.inkFaint, fontSize: 14 },
 });

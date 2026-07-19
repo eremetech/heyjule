@@ -142,6 +142,34 @@ a {
   font-weight: 400;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.key-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-3);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.key-status::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--status-mild);
+}
+
+.key-status-ready::before { background: var(--status-good); }
+.key-status-error { color: var(--danger); }
+
 @media (prefers-reduced-transparency: reduce) {
   .topbar {
     background: var(--bg);
@@ -481,6 +509,162 @@ label {
   margin-top: 0.375rem;
   font-size: 0.9375rem;
   color: var(--ink-3);
+}
+
+.section-heading-row,
+.report-actions,
+.finding-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.section-heading-row { margin-bottom: 1rem; }
+.section-heading-row h2 { margin-bottom: 0.25rem; }
+
+.section-note {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+}
+
+.demo-badge,
+.report-kicker,
+.trend-direction {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  background: var(--series-1-soft);
+  color: var(--accent-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.export-list {
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.export-list li + li { border-top: 1px solid var(--line); }
+
+.export-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  transition: background 150ms ease-out;
+}
+
+.export-row:hover { background: var(--series-1-soft); }
+.export-row > div { display: flex; flex-direction: column; gap: 0.2rem; }
+.export-row span, .export-meta { color: var(--ink-3); font-size: 0.8125rem; }
+.export-meta { align-items: flex-end; }
+
+/* ---------- encrypted clinical report ---------- */
+
+.report-header { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+
+.decrypt-state {
+  margin-top: 2rem;
+  padding: 2rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.decrypt-error { color: var(--danger); }
+.decrypt-error p { margin-top: 0.5rem; color: var(--ink-2); }
+
+.clinical-report { margin-top: 1.5rem; }
+.report-actions { justify-content: flex-end; margin-bottom: 1rem; }
+
+.report-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(13rem, 0.8fr);
+  gap: 2rem;
+  padding: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface);
+}
+
+.report-hero h2 { margin-top: 0.75rem; font-size: 1.55rem; }
+.report-hero > div > p { margin-top: 0.85rem; color: var(--ink-2); line-height: 1.65; }
+
+.report-demographics { display: flex; flex-direction: column; gap: 0.75rem; }
+.report-demographics div { border-bottom: 1px solid var(--line); padding-bottom: 0.65rem; }
+.report-demographics dt { color: var(--ink-3); font-size: 0.75rem; }
+.report-demographics dd { margin-top: 0.15rem; font-size: 0.875rem; }
+
+.report-warning {
+  margin-top: 1rem;
+  padding: 0.875rem 1rem;
+  border-left: 3px solid var(--status-mild);
+  background: color-mix(in srgb, var(--status-mild) 8%, transparent);
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+}
+
+.report-section { margin-top: 2.5rem; }
+.report-section > h2 { margin-bottom: 1rem; }
+
+.finding-list { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
+.finding {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--status-mild);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 1rem 1.125rem;
+}
+.finding-attention { border-left-color: var(--status-moderate); }
+.finding-urgent { border-left-color: var(--status-severe); }
+.finding-heading span { color: var(--ink-3); font-size: 0.75rem; text-transform: uppercase; }
+.finding p, .trend-card p, .report-sections p { margin-top: 0.5rem; color: var(--ink-2); font-size: 0.9rem; line-height: 1.55; }
+
+.evidence-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+.evidence-list code, .report-provenance code {
+  border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+  background: var(--line);
+  color: var(--ink-2);
+  font-size: 0.6875rem;
+}
+.evidence-empty { display: block; margin-top: 0.75rem; color: var(--ink-3); font-size: 0.75rem; }
+
+.trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; }
+.trend-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 1rem; }
+.trend-card h3 { margin-top: 0.6rem; }
+.trend-improving { color: var(--status-good); background: color-mix(in srgb, var(--status-good) 12%, transparent); }
+.trend-worsening { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
+.report-sections { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.report-sections article { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.report-sections h3 { text-transform: capitalize; }
+
+.source-counts { list-style: none; max-width: 24rem; }
+.source-counts li { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: 0.875rem; }
+.report-provenance > p { margin-top: 1rem; color: var(--ink-3); font-size: 0.75rem; }
+
+@media (max-width: 40rem) {
+  .key-status { display: none; }
+  .report-hero { grid-template-columns: 1fr; }
+  .export-row { align-items: flex-start; flex-direction: column; }
+  .export-meta { align-items: flex-start; }
+}
+
+@media print {
+  .topbar, .back-link, .report-actions { display: none !important; }
+  .page { max-width: none; padding: 0; }
+  .clinical-report { margin-top: 0; }
 }
 
 /* ---------- report link flow ---------- */

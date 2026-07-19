@@ -2186,7 +2186,7 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - "ReactCommon/turbomodule/core (from `../../../node_modules/.pnpm/react-native@0.81.5_@babel+core@7.29.7_@react-native+metro-config@0.86.0_@babel+core@7.29.7___vxuy73ger6rgf3cfupi7kntx2y/node_modules/react-native/ReactCommon`)"
   - "ReactNativeDependencies (from `../../../node_modules/.pnpm/react-native@0.81.5_@babel+core@7.29.7_@react-native+metro-config@0.86.0_@babel+core@7.29.7___vxuy73ger6rgf3cfupi7kntx2y/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)"
-  - "RNAudioAPI (from `../../../node_modules/.pnpm/react-native-audio-api@0.10.3_react-native@0.81.5_@babel+core@7.29.7_@react-native+metro-conf_hxrbjjmmnls37uuozaeze2bpue/node_modules/react-native-audio-api`)"
+  - RNAudioAPI (from `../../../node_modules/react-native-audio-api`)
   - "RNGestureHandler (from `../../../node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.81.5_@babel+core@7.29.7_@react-native+metr_63qp5owdpvg2uixdulfuypxb4q/node_modules/react-native-gesture-handler`)"
   - "RNReanimated (from `../../../node_modules/.pnpm/react-native-reanimated@4.1.7_react-native-worklets@0.5.1_@babel+core@7.29.7_react-native@0.8_dm5fhselhd6sfgidsk4bf2bguy/node_modules/react-native-reanimated`)"
   - "RNSVG (from `../../../node_modules/.pnpm/react-native-svg@15.12.1_react-native@0.81.5_@babel+core@7.29.7_@react-native+metro-config@0._qvvy2ee7ird7xnyreldn2axhwe/node_modules/react-native-svg`)"
@@ -2360,7 +2360,7 @@ EXTERNAL SOURCES:
   ReactNativeDependencies:
     :podspec: "../../../node_modules/.pnpm/react-native@0.81.5_@babel+core@7.29.7_@react-native+metro-config@0.86.0_@babel+core@7.29.7___vxuy73ger6rgf3cfupi7kntx2y/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
   RNAudioAPI:
-    :path: "../../../node_modules/.pnpm/react-native-audio-api@0.10.3_react-native@0.81.5_@babel+core@7.29.7_@react-native+metro-conf_hxrbjjmmnls37uuozaeze2bpue/node_modules/react-native-audio-api"
+    :path: "../../../node_modules/react-native-audio-api"
   RNGestureHandler:
     :path: "../../../node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.81.5_@babel+core@7.29.7_@react-native+metr_63qp5owdpvg2uixdulfuypxb4q/node_modules/react-native-gesture-handler"
   RNReanimated:
@@ -2455,13 +2455,13 @@ SPEC CHECKSUMS:
   ReactCodegen: 95cdb84dd28b5aa8c194fefaac568641a6e0fc2d
   ReactCommon: 08810150b1206cc44aecf5f6ae19af32f29151a8
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
-  RNAudioAPI: a7f3bffa7035e936ac17e4b6a829df4aba2c0ca7
+  RNAudioAPI: 78cabe2fb7662f4d3f802bb7ee0064d56bca5604
   RNGestureHandler: 2914750df066d89bf9d8f48a10ad5f0051108ac3
   RNReanimated: 99b2da0608437aa9a3cbb85e5a4d16580db688e7
   RNSVG: 31d6639663c249b7d5abc9728dde2041eb2a3c34
   RNWorklets: 83ebb3dd6bdfd352b8f9fd081a75cf4996cfd4a2
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
-PODFILE CHECKSUM: d51234057caddf8ef23a82936a315dfc4b123a41
+PODFILE CHECKSUM: fb5b8c2ed7a5d89dcada8b7feca2650a3c9039b0
 
 COCOAPODS: 1.17.0

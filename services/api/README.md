@@ -16,7 +16,10 @@ ChatGPT MCP handoff, consented doctor access, and end-to-end encrypted exports.
 - Care-relationship checks before doctor timeline reads or key lookup.
 - Patient-created, doctor-public-key encrypted report exports. The server stores
   and returns ciphertext but has no doctor private key.
-- Metadata-only audit events and automatic expiry cleanup.
+- OpenAI Responses API Structured Outputs over the patient's selected source
+  window, with evidence ids, `store: false`, no plaintext report persistence,
+  and separate mock/live-data safety gates.
+- Metadata-only audit events and automatic encrypted-export expiry cleanup.
 - Authenticated, five-minute xAI Voice API client-token minting without exposing
   the permanent provider key to the patient app.
 
@@ -45,28 +48,28 @@ audience binding, and discovery metadata.
 | Method | Path | Role / scope | Purpose |
 | --- | --- | --- | --- |
 | `PUT` | `/v1/devices` | patient / `device:write` | Register or rotate the device encryption public key |
-| `GET` | `/v1/inbox?device_id=…` | patient / `entry:claim` | Download unexpired sealed MCP entries (non-destructive) |
+| `GET` | `/v1/inbox?device_id=…` | patient / `entry:claim` | Download pending sealed MCP entries (non-destructive) |
 | `DELETE` | `/v1/inbox/:id?device_id=…` | patient / `entry:claim` | Acknowledge durable device storage and delete the server copy |
 | `PUT` | `/v1/patient/entries/:id` | patient / `patient:data:write` | Idempotently store an encrypted-at-rest timeline item |
 | `GET` | `/v1/patient/entries` | patient / `patient:data:read` | Read the patient's own timeline |
+| `PUT` | `/v1/patient/profile` | patient / `patient:profile:write` | Store the encrypted-at-rest patient profile |
+| `POST` | `/v1/patient/care-links/claim` | patient / `care:link` | Consume a clinician invite and grant access |
+| `GET` | `/v1/patient/care-links` | patient / `care:link` | List active clinician relationships |
+| `DELETE` | `/v1/patient/care-links/:doctorId` | patient / `care:link` | Revoke clinician access immediately |
+| `POST` | `/v1/patient/reports/generate` | patient / `report:write` | Generate a structured clinical draft from selected linked-patient data |
+| `GET` | `/v1/patient/exports` | patient / `report:write` | List the patient's active encrypted exports |
 | `POST` | `/v1/voice/token` | patient / `patient:data:write` | Mint a short-lived xAI Voice API client token |
+| `POST` | `/v1/doctor/invites` | doctor / `care:invite` | Create a seven-day single-use patient invite |
+| `GET` | `/v1/doctor/invites` | doctor / `care:invite` | List pending invites |
+| `DELETE` | `/v1/doctor/invites/:id` | doctor / `care:invite` | Revoke a pending invite |
+| `GET` | `/v1/doctor/patients` | doctor / `report:data:read` | List actively linked patient profiles |
 | `GET` | `/v1/doctor/patients/:id/entries` | doctor / `report:data:read` | Read a linked patient's server-readable timeline |
+| `GET` | `/v1/doctor/patients/:id/exports` | doctor / `report:read` | List a linked patient's active ciphertext exports |
 | `POST` | `/v1/doctor/keys` | doctor / `doctor:key:write` | Register a doctor-held export decryption public key |
 | `GET` | `/v1/patient/doctors/:id/key` | patient / `report:write` | Resolve the active linked doctor's public key |
 | `POST` | `/v1/exports` | patient / `report:write` | Upload a client-encrypted doctor export |
 | `GET` | `/v1/exports/:id` | doctor / `report:read` | Download an encrypted export |
-
-## Provision a care relationship
-
-For this pilot backend, relationship activation is an operator command rather
-than a public API:
-
-```bash
-pnpm --filter @heyjule/api care-link -- patient_subject doctor_subject
-```
-
-Production onboarding should call the same database operation from a separately
-authenticated consent workflow and record the patient-facing consent receipt.
+| `DELETE` | `/v1/exports/:id` | patient / `report:write` | Revoke and delete an encrypted export |
 
 ## Verification
 

@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
   assertValidPublicKey,
@@ -14,13 +14,17 @@ import type {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { ZodError } from "zod";
 import { createAuthenticator, hasAccess, type Authenticate, type Principal } from "./auth.ts";
+import { generateClinicalReport, selectReportEntries } from "./clinical-report.ts";
 import { loadConfig, type ApiConfig } from "./config.ts";
 import { ApiDatabase } from "./db.ts";
 import { createMcpServer } from "./mcp.ts";
 import {
   encryptedExportSchema,
+  generateClinicalReportSchema,
+  claimCareInviteSchema,
   idSchema,
   patientEntrySchema,
+  patientProfileSchema,
   registerDeviceSchema,
   registerDoctorKeySchema,
 } from "./schemas.ts";
@@ -29,6 +33,15 @@ const MAX_BODY_BYTES = 2_200_000;
 const MCP_METHODS = new Set(["POST", "GET", "DELETE", "OPTIONS"]);
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 120;
+const INVITE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+function careInviteCode() {
+  return [...randomBytes(6)].map((value) => INVITE_ALPHABET[value & 31]).join("");
+}
+
+function careInviteHash(code: string, key: Uint8Array) {
+  return createHmac("sha256", key).update(code).digest("base64url");
+}
 
 class HttpError extends Error {
   constructor(
@@ -163,6 +176,16 @@ export function createApiServer(options: AppOptions) {
       issuer: config.oauthIssuer,
       audience: config.oauthAudience,
       jwksUrl: config.oauthJwksUrl,
+      additionalIssuers:
+        config.doctorOauthIssuer && config.doctorOauthJwksUrl
+          ? [
+              {
+                issuer: config.doctorOauthIssuer,
+                audience: config.doctorOauthAudience,
+                jwksUrl: config.doctorOauthJwksUrl,
+              },
+            ]
+          : undefined,
       devTokens: config.devTokens,
     });
   const rateLimit = createRateLimiter(config.trustProxy);
@@ -191,6 +214,9 @@ export function createApiServer(options: AppOptions) {
             "entry:claim",
             "patient:data:write",
             "patient:data:read",
+            "patient:profile:write",
+            "care:link",
+            "care:invite",
             "doctor:key:write",
             "report:data:read",
             "report:write",
@@ -208,7 +234,7 @@ export function createApiServer(options: AppOptions) {
             "HeyJule MCP security",
             "",
             "The new_entry tool requires a patient OAuth token with entry:write.",
-            "Summaries are sealed to a registered patient device public key and expire after 15 minutes.",
+            "Summaries are sealed to a registered patient device public key and retained until that device acknowledges durable storage.",
             "The API stores ciphertext until the device acknowledges durable local storage.",
             "Do not send full chat transcripts or use this tool without the patient's explicit request.",
           ].join("\n"),
@@ -337,6 +363,131 @@ export function createApiServer(options: AppOptions) {
         return json(response, 200, { entries: database.listPatientEntries(patient.sub) });
       }
 
+      if (url.pathname === "/v1/patient/profile" && request.method === "PUT") {
+        const patient = requireAccess(principal, "patient", "patient:profile:write");
+        const profile = patientProfileSchema.parse(await readJson(request));
+        database.putPatientProfile(patient.sub, profile);
+        return json(response, 200, { stored: true });
+      }
+
+      if (url.pathname === "/v1/patient/care-links/claim" && request.method === "POST") {
+        const patient = requireAccess(principal, "patient", "care:link");
+        const body = claimCareInviteSchema.parse(await readJson(request));
+        const relationship = database.claimCareInvite(
+          patient.sub,
+          careInviteHash(body.code, config.dataKey),
+        );
+        if (!relationship) throw new HttpError(404, "invite_not_found");
+        return json(response, 201, relationship);
+      }
+
+      if (url.pathname === "/v1/patient/care-links" && request.method === "GET") {
+        const patient = requireAccess(principal, "patient", "care:link");
+        return json(response, 200, { relationships: database.listCareRelationships(patient.sub) });
+      }
+
+      if (url.pathname === "/v1/patient/reports/generate" && request.method === "POST") {
+        const patient = requireAccess(principal, "patient", "report:write");
+        const body = generateClinicalReportSchema.parse(await readJson(request));
+        if (!config.openaiApiKey) throw new HttpError(503, "report_provider_not_configured");
+        const doctorKey = database.getDoctorKeyForPatient(patient.sub, body.doctorId);
+        if (!doctorKey) throw new HttpError(404, "doctor_key_not_found");
+        const profile = database.getPatientProfile(patient.sub);
+        if (!profile) throw new HttpError(409, "patient_profile_required");
+        const entries = database.listPatientEntries(patient.sub);
+        const now = new Date();
+        const selectedEntries = selectReportEntries(entries, body.timeframeDays, body.scope, now);
+        if (selectedEntries.length === 0) throw new HttpError(422, "report_has_no_entries");
+        const mockOnly = selectedEntries.every((entry) => entry.dataMode === "mock");
+        if (mockOnly && !config.allowMockLlm) {
+          throw new HttpError(503, "mock_llm_not_enabled");
+        }
+        if (!mockOnly && !config.openaiPhiEnabled) {
+          throw new HttpError(503, "openai_phi_not_enabled");
+        }
+        let report: Awaited<ReturnType<typeof generateClinicalReport>>;
+        try {
+          report = await generateClinicalReport({
+            apiKey: config.openaiApiKey,
+            model: config.openaiModel,
+            patient: profile,
+            entries,
+            timeframeDays: body.timeframeDays,
+            scope: body.scope,
+            fetch: fetchFromProvider,
+            now,
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message === "report_has_no_entries") {
+            throw new HttpError(422, "report_has_no_entries");
+          }
+          throw new HttpError(502, "report_provider_failed");
+        }
+        database.auditClinicalReportGeneration(patient.sub, report.generation.responseId, {
+          doctorId: body.doctorId,
+          model: report.generation.model,
+          entryCount: String(report.sourceEntryIds.length),
+        });
+        return json(response, 201, { report, doctorKey });
+      }
+
+      if (url.pathname === "/v1/patient/exports" && request.method === "GET") {
+        const patient = requireAccess(principal, "patient", "report:write");
+        return json(response, 200, { exports: database.listEncryptedExportsForPatient(patient.sub) });
+      }
+
+      const patientCareLinkPath = matchPath(
+        url.pathname,
+        /^\/v1\/patient\/care-links\/(?<doctorId>[A-Za-z0-9_-]+)$/u,
+      );
+      if (patientCareLinkPath && request.method === "DELETE") {
+        const patient = requireAccess(principal, "patient", "care:link");
+        const revoked = database.revokeCareRelationship(
+          patient.sub,
+          idSchema.parse(patientCareLinkPath.doctorId),
+        );
+        if (!revoked) throw new HttpError(404, "care_relationship_not_found");
+        return empty(response, 204);
+      }
+
+      if (url.pathname === "/v1/doctor/invites" && request.method === "POST") {
+        const doctor = requireAccess(principal, "doctor", "care:invite");
+        const code = careInviteCode();
+        const createdAt = new Date();
+        const invite = {
+          id: `invite_${randomUUID().replaceAll("-", "")}`,
+          code,
+          createdAt: createdAt.toISOString(),
+          expiresAt: new Date(createdAt.getTime() + 7 * 86_400_000).toISOString(),
+        };
+        database.createCareInvite(doctor.sub, {
+          ...invite,
+          codeHash: careInviteHash(code, config.dataKey),
+        });
+        return json(response, 201, invite);
+      }
+
+      if (url.pathname === "/v1/doctor/invites" && request.method === "GET") {
+        const doctor = requireAccess(principal, "doctor", "care:invite");
+        return json(response, 200, { invites: database.listCareInvites(doctor.sub) });
+      }
+
+      const doctorInvitePath = matchPath(
+        url.pathname,
+        /^\/v1\/doctor\/invites\/(?<id>[A-Za-z0-9_-]+)$/u,
+      );
+      if (doctorInvitePath && request.method === "DELETE") {
+        const doctor = requireAccess(principal, "doctor", "care:invite");
+        const deleted = database.revokeCareInvite(doctor.sub, idSchema.parse(doctorInvitePath.id));
+        if (!deleted) throw new HttpError(404, "invite_not_found");
+        return empty(response, 204);
+      }
+
+      if (url.pathname === "/v1/doctor/patients" && request.method === "GET") {
+        const doctor = requireAccess(principal, "doctor", "report:data:read");
+        return json(response, 200, { patients: database.listLinkedPatients(doctor.sub) });
+      }
+
       const doctorPatientPath = matchPath(
         url.pathname,
         /^\/v1\/doctor\/patients\/(?<patientId>[A-Za-z0-9_-]+)\/entries$/u,
@@ -346,7 +497,8 @@ export function createApiServer(options: AppOptions) {
         const patientId = idSchema.parse(doctorPatientPath.patientId);
         const entries = database.listPatientEntriesForDoctor(doctor.sub, patientId);
         if (!entries) throw new HttpError(404, "patient_not_linked");
-        return json(response, 200, { patientId, entries });
+        const patient = database.getLinkedPatient(doctor.sub, patientId);
+        return json(response, 200, { patient, entries });
       }
 
       if (url.pathname === "/v1/doctor/keys" && request.method === "POST") {
@@ -360,8 +512,8 @@ export function createApiServer(options: AppOptions) {
           fingerprint: fingerprintPublicKey(body.publicKey),
           createdAt: new Date().toISOString(),
         };
-        database.registerDoctorKey(key);
-        return json(response, 201, key);
+        const inserted = database.registerDoctorKey(key);
+        return json(response, inserted ? 201 : 200, key);
       }
 
       const doctorKeyPath = matchPath(
@@ -406,12 +558,31 @@ export function createApiServer(options: AppOptions) {
         });
       }
 
+      const doctorPatientExportsPath = matchPath(
+        url.pathname,
+        /^\/v1\/doctor\/patients\/(?<patientId>[A-Za-z0-9_-]+)\/exports$/u,
+      );
+      if (doctorPatientExportsPath && request.method === "GET") {
+        const doctor = requireAccess(principal, "doctor", "report:read");
+        const patientId = idSchema.parse(doctorPatientExportsPath.patientId);
+        const exports = database.listEncryptedExportsForDoctor(doctor.sub, patientId);
+        if (!exports) throw new HttpError(404, "patient_not_linked");
+        return json(response, 200, { exports });
+      }
+
       const exportPath = matchPath(url.pathname, /^\/v1\/exports\/(?<id>[A-Za-z0-9_-]+)$/u);
       if (exportPath && request.method === "GET") {
         const doctor = requireAccess(principal, "doctor", "report:read");
         const value = database.getEncryptedExport(idSchema.parse(exportPath.id), doctor.sub);
         if (!value) throw new HttpError(404, "export_not_found");
         return json(response, 200, value);
+      }
+
+      if (exportPath && request.method === "DELETE") {
+        const patient = requireAccess(principal, "patient", "report:write");
+        const deleted = database.deleteEncryptedExport(patient.sub, idSchema.parse(exportPath.id));
+        if (!deleted) throw new HttpError(404, "export_not_found");
+        return empty(response, 204);
       }
 
       throw new HttpError(404, "not_found");
@@ -437,6 +608,9 @@ export function createApiServer(options: AppOptions) {
       }
       if (error instanceof Error && error.message === "entry_owner_mismatch") {
         return json(response, 409, { error: "entry_owner_mismatch" });
+      }
+      if (error instanceof Error && error.message === "doctor_key_conflict") {
+        return json(response, 409, { error: "doctor_key_conflict" });
       }
       // Never serialize thrown objects: DB/crypto errors can contain sensitive
       // details. Production logging should emit only this request id.

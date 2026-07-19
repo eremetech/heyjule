@@ -11,7 +11,16 @@ const reactNativeScriptExpression =
 function withPathSafePodfile(config) {
   return withPodfile(config, (podfileConfig) => {
     const podfile = podfileConfig.modResults.contents;
-    if (podfile.includes(podfileMarker)) return podfileConfig;
+    const pathSafeCommand =
+      'PROJECT_ROOT="$PROJECT_DIR/../.." PROJECT_DIR=Pods bash -l "$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh"';
+
+    if (podfile.includes(podfileMarker)) {
+      podfileConfig.modResults.contents = podfile.replace(
+        /^(\s*)phase\.shell_script = .*get-app-config-ios\.sh.*$/m,
+        `$1phase.shell_script = '${pathSafeCommand}'`,
+      );
+      return podfileConfig;
+    }
 
     const postInstallEnd = "\n  end\nend\n";
     const insertionIndex = podfile.lastIndexOf(postInstallEnd);
@@ -28,7 +37,7 @@ function withPathSafePodfile(config) {
       pod_target.shell_script_build_phases.each do |phase|
         next unless phase.name == '[CP-User] Generate app.config for prebuilt Constants.manifest'
 
-        phase.shell_script = 'bash -l -c "\\"$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\\""'
+        phase.shell_script = '${pathSafeCommand}'
       end
     end`;
 

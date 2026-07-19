@@ -58,6 +58,9 @@ function textFromMessage(message: UIMessage) {
 }
 
 export async function POST(request: Request) {
+  if (process.env.HEYJULE_ENABLE_LEGACY_REPORTS !== "true") {
+    return textResponse("Not found.", 404);
+  }
   if (!isSameOrigin(request)) return textResponse("Invalid request origin.", 403);
 
   const declaredSize = Number(request.headers.get("content-length") ?? 0);
@@ -165,7 +168,7 @@ export async function POST(request: Request) {
   }
 
   const reportContext = buildReportChatContext(link);
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.6-terra";
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.6";
   const result = streamText({
     model: openai(model),
     system: reportChatInstructions(reportContext),

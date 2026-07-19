@@ -71,7 +71,7 @@ target 'heyjule' do
       pod_target.shell_script_build_phases.each do |phase|
         next unless phase.name == '[CP-User] Generate app.config for prebuilt Constants.manifest'
 
-        phase.shell_script = 'bash -l -c "\"$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\""'
+        phase.shell_script = 'PROJECT_ROOT="$PROJECT_DIR/../.." PROJECT_DIR=Pods bash -l "$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh"'
       end
     end
   end

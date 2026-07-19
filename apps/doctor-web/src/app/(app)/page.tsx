@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireDoctor } from "@/lib/session";
-import { listLinkedPatients, listPendingInvites } from "@/lib/db";
+import { heyJuleApi } from "@/lib/heyjule-api";
 import { generateInviteCode, revokeInviteCode } from "./actions";
 
 function age(dateOfBirth: string) {
@@ -23,9 +23,11 @@ function relativeDay(iso: string | null) {
 }
 
 export default async function DashboardPage() {
-  const doctor = await requireDoctor();
-  const patients = listLinkedPatients(doctor.id);
-  const invites = listPendingInvites(doctor.id);
+  await requireDoctor();
+  const [patients, invites] = await Promise.all([
+    heyJuleApi.listPatients(),
+    heyJuleApi.listInvites(),
+  ]);
 
   return (
     <>
@@ -43,12 +45,12 @@ export default async function DashboardPage() {
               <li key={p.id}>
                 <Link className="patient-row" href={`/patients/${p.id}`}>
                   <div>
-                    <div>{p.name}</div>
+                    <div>{p.profile?.name ?? "Patient profile pending"}</div>
                     <div className="meta">
-                      {age(p.date_of_birth)} · {p.sex}
+                      {p.profile ? `${age(p.profile.dateOfBirth)} · ${p.profile.sex}` : p.id}
                     </div>
                   </div>
-                  <div className="meta">{relativeDay(p.last_symptom_at)}</div>
+                  <div className="meta">{relativeDay(p.lastEntryAt)}</div>
                 </Link>
               </li>
             ))}

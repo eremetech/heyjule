@@ -8,11 +8,18 @@ export type ApiConfig = {
   oauthIssuer: string;
   oauthAudience: string;
   oauthJwksUrl: string;
+  doctorOauthIssuer: string | undefined;
+  doctorOauthAudience: string;
+  doctorOauthJwksUrl: string | undefined;
   allowedOrigins: Set<string>;
   trustProxy: boolean;
   production: boolean;
   devTokens: string | undefined;
   xaiApiKey: string | undefined;
+  openaiApiKey: string | undefined;
+  openaiModel: string;
+  openaiPhiEnabled: boolean;
+  allowMockLlm: boolean;
 };
 
 function required(name: string) {
@@ -39,6 +46,9 @@ export function loadConfig(): ApiConfig {
     oauthAudience: process.env.HEYJULE_OAUTH_AUDIENCE?.trim() || apiUrl,
     oauthJwksUrl:
       process.env.HEYJULE_OAUTH_JWKS_URL?.trim() || `${oauthIssuer}/.well-known/jwks.json`,
+    doctorOauthIssuer: process.env.HEYJULE_DOCTOR_OAUTH_ISSUER?.trim().replace(/\/$/u, "") || undefined,
+    doctorOauthAudience: process.env.HEYJULE_DOCTOR_OAUTH_AUDIENCE?.trim() || apiUrl,
+    doctorOauthJwksUrl: process.env.HEYJULE_DOCTOR_OAUTH_JWKS_URL?.trim() || undefined,
     allowedOrigins: new Set(
       (process.env.HEYJULE_ALLOWED_ORIGINS ?? "")
         .split(",")
@@ -49,5 +59,9 @@ export function loadConfig(): ApiConfig {
     production,
     devTokens,
     xaiApiKey: process.env.XAI_API_KEY?.trim() || undefined,
+    openaiApiKey: process.env.OPENAI_API_KEY?.trim() || undefined,
+    openaiModel: process.env.OPENAI_MODEL?.trim() || "gpt-5.6",
+    openaiPhiEnabled: process.env.OPENAI_PHI_ENABLED === "true",
+    allowMockLlm: process.env.HEYJULE_ALLOW_MOCK_LLM === "true",
   };
 }

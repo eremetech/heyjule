@@ -21,14 +21,7 @@ export type ShareScope = {
   wearables: boolean;
   treatments: boolean;
   conversations: boolean;
-};
-
-export type ShareGrant = {
-  id: string;
-  code: string;
-  expiresAt: string;
-  scope: ShareScope;
-  status: "active" | "revoked";
+  proms: boolean;
 };
 
 export type AppRoute = "home" | "checkin" | "health" | "journal" | "share";
