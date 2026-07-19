@@ -11,8 +11,8 @@ services:
       HOSTNAME: 0.0.0.0
       DATABASE_PATH: /app/data/identity.db
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET to at least 32 random characters}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the doctor web public HTTPS URL}
-      HEYJULE_API_URL: ${HEYJULE_API_URL:?Set HEYJULE_API_URL to the public API HTTPS URL}
+      BETTER_AUTH_URL: https://jules.agenticsonar.com
+      HEYJULE_API_URL: https://api.jules.agenticsonar.com
       HEYJULE_INTERNAL_API_URL: http://api:8787
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
@@ -54,16 +54,16 @@ services:
     environment:
       NODE_ENV: production
       PORT: "8787"
-      HEYJULE_API_URL: ${HEYJULE_API_URL:?Set HEYJULE_API_URL to the public HTTPS URL}
+      HEYJULE_API_URL: https://api.jules.agenticsonar.com
       HEYJULE_DATABASE_PATH: /app/data/heyjule-api.db
       HEYJULE_DATA_KEY: ${HEYJULE_DATA_KEY:?Set HEYJULE_DATA_KEY to a 32-byte base64url key}
       HEYJULE_OAUTH_ISSUER: ${HEYJULE_OAUTH_ISSUER:?Set HEYJULE_OAUTH_ISSUER to the patient OAuth issuer}
-      HEYJULE_OAUTH_AUDIENCE: ${HEYJULE_OAUTH_AUDIENCE:-}
+      HEYJULE_OAUTH_AUDIENCE: https://api.jules.agenticsonar.com
       HEYJULE_OAUTH_JWKS_URL: ${HEYJULE_OAUTH_JWKS_URL:-}
-      HEYJULE_DOCTOR_OAUTH_ISSUER: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the doctor web public HTTPS URL}
-      HEYJULE_DOCTOR_OAUTH_AUDIENCE: ${HEYJULE_API_URL:?Set HEYJULE_API_URL to the public API HTTPS URL}
+      HEYJULE_DOCTOR_OAUTH_ISSUER: https://jules.agenticsonar.com
+      HEYJULE_DOCTOR_OAUTH_AUDIENCE: https://api.jules.agenticsonar.com
       HEYJULE_DOCTOR_OAUTH_JWKS_URL: http://doctor-web:3000/api/auth/jwks
-      HEYJULE_ALLOWED_ORIGINS: ${HEYJULE_ALLOWED_ORIGINS:-}
+      HEYJULE_ALLOWED_ORIGINS: https://jules.agenticsonar.com
       HEYJULE_TRUST_PROXY: "true"
       XAI_API_KEY: ${XAI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

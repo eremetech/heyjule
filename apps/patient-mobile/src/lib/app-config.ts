@@ -1,4 +1,7 @@
-const apiUrl = process.env.EXPO_PUBLIC_HEYJULE_API_URL?.trim().replace(/\/$/u, "") || null;
+const productionApiUrl = "https://api.jules.agenticsonar.com";
+const apiUrl =
+  process.env.EXPO_PUBLIC_HEYJULE_API_URL?.trim().replace(/\/$/u, "") ||
+  (__DEV__ ? null : productionApiUrl);
 const oauthIssuer = process.env.EXPO_PUBLIC_HEYJULE_OAUTH_ISSUER?.trim().replace(/\/$/u, "") || null;
 const oauthClientId = process.env.EXPO_PUBLIC_HEYJULE_OAUTH_CLIENT_ID?.trim() || null;
 

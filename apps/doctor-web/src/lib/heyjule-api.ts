@@ -14,7 +14,9 @@ import { auth } from "./auth";
 const internalApiUrl = (
   process.env.HEYJULE_INTERNAL_API_URL ??
   process.env.HEYJULE_API_URL ??
-  "http://localhost:8787"
+  (process.env.NODE_ENV === "production"
+    ? "https://api.jules.agenticsonar.com"
+    : "http://localhost:8787")
 ).replace(/\/$/u, "");
 
 export class HeyJuleApiError extends Error {

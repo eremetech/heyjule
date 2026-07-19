@@ -10,14 +10,14 @@ services and one private state service:
 
 Create one HTTPS domain for each service in Dokploy/Coolify. For example:
 
-- API: `https://jules.agenticsonar.com` → `api:8787`
-- Doctor web: `https://doctors.agenticsonar.com` → `doctor-web:3000`
+- API: `https://api.jules.agenticsonar.com` → `api:8787`
+- Doctor web: `https://jules.agenticsonar.com` → `doctor-web:3000`
 
 ## Required environment
 
 ```dotenv
-HEYJULE_API_URL=https://jules.agenticsonar.com
-BETTER_AUTH_URL=https://doctors.agenticsonar.com
+HEYJULE_API_URL=https://api.jules.agenticsonar.com
+BETTER_AUTH_URL=https://jules.agenticsonar.com
 
 # Generate each value independently; commands are below.
 HEYJULE_DATA_KEY=
@@ -26,11 +26,11 @@ BETTER_AUTH_SECRET=
 # Patient/mobile OAuth provider. Its access tokens must use the API URL as
 # audience and include the patient role/scopes documented by services/api.
 HEYJULE_OAUTH_ISSUER=https://auth.example.com
-HEYJULE_OAUTH_AUDIENCE=https://jules.agenticsonar.com
+HEYJULE_OAUTH_AUDIENCE=https://api.jules.agenticsonar.com
 HEYJULE_OAUTH_JWKS_URL=
 
 # Browser callers only. Native mobile clients do not send Origin.
-HEYJULE_ALLOWED_ORIGINS=https://doctors.agenticsonar.com
+HEYJULE_ALLOWED_ORIGINS=https://jules.agenticsonar.com
 
 # Optional voice provider credential.
 XAI_API_KEY=
@@ -101,6 +101,6 @@ adapters to managed PostgreSQL before horizontal scaling or high availability.
 Verify both public health endpoints after deployment:
 
 ```text
-https://jules.agenticsonar.com/healthz
-https://doctors.agenticsonar.com/api/health
+https://api.jules.agenticsonar.com/healthz
+https://jules.agenticsonar.com/api/health
 ```

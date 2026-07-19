@@ -3,8 +3,13 @@ import { nextCookies } from "better-auth/next-js";
 import { jwt } from "better-auth/plugins";
 import { db } from "./db.ts";
 
-const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
-const apiAudience = process.env.HEYJULE_API_URL ?? "http://localhost:8787";
+const production = process.env.NODE_ENV === "production";
+const baseURL =
+  process.env.BETTER_AUTH_URL ??
+  (production ? "https://jules.agenticsonar.com" : "http://localhost:3000");
+const apiAudience =
+  process.env.HEYJULE_API_URL ??
+  (production ? "https://api.jules.agenticsonar.com" : "http://localhost:8787");
 const doctorScopes = [
   "care:invite",
   "doctor:key:write",

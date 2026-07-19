@@ -8,6 +8,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /workspace
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY patches patches
 COPY apps/doctor-web/package.json apps/doctor-web/package.json
 COPY packages/crypto/package.json packages/crypto/package.json
 COPY packages/shared-types/package.json packages/shared-types/package.json
