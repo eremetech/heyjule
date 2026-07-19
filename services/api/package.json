@@ -14,10 +14,16 @@
     "care-link": "tsx src/cli.ts care-link"
   },
   "dependencies": {
+    "@ai-sdk/openai": "3.0.86",
+    "@chat-adapter/state-memory": "4.34.0",
+    "@chat-adapter/state-redis": "4.34.0",
+    "@chat-adapter/web": "4.34.0",
     "@heyjule/crypto": "workspace:*",
     "@heyjule/shared-types": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "ai": "6.0.230",
     "better-sqlite3": "^12.11.1",
+    "chat": "4.34.0",
     "jose": "^6.2.3",
     "openai": "^6.48.0",
     "zod": "^4.4.3"

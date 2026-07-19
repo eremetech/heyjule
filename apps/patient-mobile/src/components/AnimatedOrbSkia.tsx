@@ -1,6 +1,6 @@
 import { Canvas, Fill, Shader, Skia, useClock } from "@shopify/react-native-skia";
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, View } from "react-native";
+import { AccessibilityInfo, StyleSheet, View } from "react-native";
 import { useDerivedValue } from "react-native-reanimated";
 
 export type OrbMode = "idle" | "listening" | "thinking" | "saved";
@@ -11,116 +11,122 @@ type AnimatedOrbProps = {
   level?: number;
 };
 
-const ORB_EFFECT = Skia.RuntimeEffect.Make(`
+// Native Skia port of orb-ui's Cloud theme. The web implementation uses the
+// package directly; keeping the shader here makes iOS and Android render the
+// same smooth cloud orb instead of the old particle sphere.
+const CLOUD_EFFECT = Skia.RuntimeEffect.Make(`
   uniform float uSize;
   uniform float uTime;
-  uniform float uEnergy;
-  uniform float uSaved;
-
-  float2 rotate2(float2 p, float angle) {
-    float s = sin(angle);
-    float c = cos(angle);
-    return float2(c * p.x - s * p.y, s * p.x + c * p.y);
-  }
+  uniform float uActivity;
 
   float hash21(float2 p) {
-    return fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+    p = fract(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+
+  float noise21(float2 p) {
+    float2 i = floor(p);
+    float2 f = fract(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash21(i), hash21(i + float2(1.0, 0.0)), u.x),
+      mix(hash21(i + float2(0.0, 1.0)), hash21(i + float2(1.0, 1.0)), u.x),
+      u.y
+    );
+  }
+
+  float fbm(float2 p) {
+    float value = 0.0;
+    float amplitude = 0.52;
+    for (int octave = 0; octave < 5; octave++) {
+      value += amplitude * noise21(p);
+      p = float2(
+        0.80 * p.x + 0.60 * p.y,
+        -0.60 * p.x + 0.80 * p.y
+      ) * 1.92 + float2(9.7, 4.3);
+      amplitude *= 0.5;
+    }
+    return value;
+  }
+
+  float3 hueRotate(float3 color) {
+    float angle = 2.3387412;
+    float c = cos(angle);
+    float s = sin(angle);
+    return float3(
+      dot(color, float3(0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928)),
+      dot(color, float3(0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283)),
+      dot(color, float3(0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072))
+    );
+  }
+
+  float3 saturateColor(float3 color) {
+    float amount = 1.05;
+    return float3(
+      dot(color, float3(0.213 + 0.787 * amount, 0.715 - 0.715 * amount, 0.072 - 0.072 * amount)),
+      dot(color, float3(0.213 - 0.213 * amount, 0.715 + 0.285 * amount, 0.072 - 0.072 * amount)),
+      dot(color, float3(0.213 - 0.213 * amount, 0.715 - 0.715 * amount, 0.072 + 0.928 * amount))
+    );
   }
 
   half4 main(float2 fragCoord) {
-    float2 uv = (fragCoord - float2(uSize * 0.5)) / (uSize * 0.5);
-    uv.y = -uv.y;
-    float radius2 = dot(uv, uv);
-    if (radius2 > 1.0) {
-      return half4(0.0);
-    }
+    float2 uv = fragCoord / uSize;
+    float2 centered = uv - 0.5;
+    float radius = length(centered);
+    float edge = 1.0 - smoothstep(0.488, 0.5, radius);
+    if (edge <= 0.0) return half4(0.0);
 
-    float radius = sqrt(radius2);
-    float sphereDepth = sqrt(max(0.0, 1.0 - radius2));
-    float time = uTime;
-    float motion = time * (0.16 + uEnergy * 0.10);
+    float2 p = centered * 2.0;
+    float t = uTime;
+    float2 warp = float2(
+      fbm(p * 1.02 + float2(t * 0.34, -t * 0.24)),
+      fbm(p * 1.08 + float2(-t * 0.27, t * 0.32) + float2(6.7, 2.9))
+    );
+    float2 curl = float2(
+      sin(p.y * 2.4 + t * 0.68 + warp.y * 3.2),
+      cos(p.x * 2.1 - t * 0.61 + warp.x * 3.0)
+    );
+    float2 warped =
+      p +
+      (warp - 0.5) * (1.18 + uActivity * 0.38) +
+      curl * (0.035 + uActivity * 0.07);
+    float broad = fbm(warped * 0.92 + float2(t * 0.14, -t * 0.18));
+    float folded = fbm(warped * 1.66 + float2(-t * 0.23, t * 0.19) + 5.2);
+    float field = mix(broad, folded, 0.3 + uActivity * 0.14);
 
-    float3 pearl = float3(0.992, 0.978, 0.972);
-    float3 blush = float3(0.982, 0.625, 0.615);
-    float3 coral = float3(0.935, 0.225, 0.245);
-    float3 hotPink = float3(0.938, 0.145, 0.430);
-    float3 peach = float3(0.988, 0.710, 0.610);
-    float3 sage = float3(0.667, 0.714, 0.541);
+    float horizon =
+      0.46 +
+      0.08 * sin((uv.x + warp.x * 0.2) * 5.4 + t * 0.42) +
+      0.16 * (broad - 0.5);
+    float upper = smoothstep(horizon - 0.12, horizon + 0.08, uv.y);
+    float band = exp(-pow((uv.y - horizon) * (5.2 + uActivity * 0.8), 2.0));
+    float cloud = smoothstep(0.24, 0.79, field);
 
-    float3 volumeColor = float3(0.0);
-    float volumeAlpha = 0.0;
-    for (int sampleIndex = 0; sampleIndex < 30; sampleIndex++) {
-      float progress = (float(sampleIndex) + 0.5) / 30.0;
-      float z = mix(-sphereDepth, sphereDepth, progress);
-      float3 p = float3(uv.x, uv.y, z);
-      p.xz = rotate2(p.xz, motion * 0.72);
-      p.yz = rotate2(p.yz, -0.34 + sin(motion * 0.46) * 0.34);
-      p.xy = rotate2(p.xy, sin(motion * 0.31) * 0.16);
+    float3 deepPeriwinkle = float3(0.36, 0.39, 0.985);
+    float3 upperPeriwinkle = float3(0.48, 0.56, 0.985);
+    float3 lowerLavender = float3(0.72, 0.78, 0.975);
+    float3 milk = float3(0.89, 0.92, 0.995);
 
-      float sheetSurface =
-        sin(p.x * 2.75 + motion * 1.8) * 0.20 +
-        sin(p.z * 2.15 - motion * 1.35) * 0.15 +
-        sin((p.x - p.z) * 5.8 + motion * 0.8) * 0.045;
-      float sheetDistance = abs(p.y - sheetSurface - 0.05);
-      float sheet = 1.0 - smoothstep(0.07, 0.285 + uEnergy * 0.035, sheetDistance);
-      float sheetEdge = exp(-abs(sheetDistance - 0.205) * 31.0);
-      float crease =
-        pow(0.5 + 0.5 * sin(p.x * 7.2 - p.z * 4.6 + motion * 1.4), 18.0) *
-        sheet;
+    float3 color = mix(lowerLavender, upperPeriwinkle, upper);
+    float upperDepth = upper * (0.14 + smoothstep(0.42, 0.78, folded) * 0.5);
+    color = mix(color, deepPeriwinkle, upperDepth);
+    float milkAmount = clamp(band * (0.42 + cloud * 0.62), 0.0, 0.88);
+    color = mix(color, milk, milkAmount);
+    float lowerMist = (1.0 - upper) * smoothstep(0.58, 0.9, broad) * 0.18;
+    color = mix(color, milk, lowerMist);
+    color += (noise21(fragCoord * 0.64) - 0.5) / 255.0;
+    color = saturateColor(hueRotate(color));
 
-      float backSurface =
-        -0.37 +
-        sin(p.x * 1.7 - motion * 0.8 + 1.5) * 0.17 +
-        sin(p.z * 2.0 + motion * 0.55) * 0.08;
-      float backSheet = 1.0 - smoothstep(0.08, 0.34, abs(p.y - backSurface));
-
-      float3 sheetColor = mix(blush, coral, clamp(0.46 + p.z * 0.38, 0.0, 1.0));
-      sheetColor = mix(sheetColor, hotPink, sheetEdge * 0.28);
-      sheetColor = mix(sheetColor, float3(1.0, 0.91, 0.90), crease * 0.55);
-      sheetColor = mix(sheetColor, sage, uSaved * 0.72);
-
-      float localAlpha = sheet * (0.068 + uEnergy * 0.018);
-      localAlpha += backSheet * 0.018;
-      float3 localColor = mix(sheetColor, peach, backSheet * 0.58);
-      localAlpha *= 0.48 + sphereDepth * 0.52;
-      localAlpha = clamp(localAlpha, 0.0, 0.16);
-
-      volumeColor += (1.0 - volumeAlpha) * localColor * localAlpha;
-      volumeAlpha += (1.0 - volumeAlpha) * localAlpha;
-    }
-
-    float3 color = pearl;
-    float lowerHaze =
-      exp(-dot(uv - float2(0.04, -0.34), uv - float2(0.04, -0.34)) * 2.5) *
-      (1.0 - smoothstep(0.38, 1.0, radius));
-    color = mix(color, peach, lowerHaze * 0.22);
-    color = mix(color, volumeColor / max(volumeAlpha, 0.001), volumeAlpha * 0.94);
-
-    float fresnel = pow(clamp(1.0 - sphereDepth, 0.0, 1.0), 2.4);
-    float highlight = exp(-dot(uv - float2(-0.38, -0.48), uv - float2(-0.38, -0.48)) * 10.0);
-    float lowerGlass = fresnel * smoothstep(-0.05, 0.95, uv.y);
-    float sideFringe = fresnel * smoothstep(0.12, 0.95, uv.x);
-    color = mix(color, float3(1.0), highlight * 0.68 + fresnel * 0.22);
-    color = mix(color, float3(0.74, 0.88, 0.90), lowerGlass * 0.18);
-    color = mix(color, float3(0.98, 0.55, 0.76), sideFringe * 0.16);
-
-    float grain = (hash21(fragCoord + time) - 0.5) * 0.012;
-    color += grain;
-
-    float shell = 1.0 - smoothstep(0.972, 1.0, radius);
-    float outline = exp(-abs(radius - 0.965) * 125.0);
-    color = mix(color, float3(0.70, 0.75, 0.78), outline * 0.38);
-    float alpha = shell * (0.91 + fresnel * 0.06);
-    return half4(half3(clamp(color, 0.0, 1.0)), half(alpha));
+    return half4(half3(clamp(color, 0.0, 1.0)), half(edge));
   }
 `);
 
 export function AnimatedOrb({ size, mode = "idle", level = 0 }: AnimatedOrbProps) {
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [breathe] = useState(() => new Animated.Value(0));
   const clock = useClock();
-  const isActive = mode === "listening" || mode === "thinking";
-  const energy = Math.max(isActive ? 0.24 : 0.08, Math.min(level, 1));
+  const normalizedLevel = Math.max(0, Math.min(level, 1));
+  const orbSize = size * 0.55;
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -128,75 +134,44 @@ export function AnimatedOrb({ size, mode = "idle", level = 0 }: AnimatedOrbProps
     return () => subscription.remove();
   }, []);
 
-  useEffect(() => {
-    if (reduceMotion) {
-      breathe.setValue(0);
-      return undefined;
-    }
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(breathe, {
-          toValue: 1,
-          duration: isActive ? 1150 : 2600,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: Platform.OS !== "web",
-        }),
-        Animated.timing(breathe, {
-          toValue: 0,
-          duration: isActive ? 950 : 2400,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: Platform.OS !== "web",
-        }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [breathe, isActive, reduceMotion]);
+  const activity =
+    mode === "listening"
+      ? 0.28 + normalizedLevel * 0.32
+      : mode === "saved"
+        ? 0.66 + normalizedLevel * 0.34
+        : mode === "idle"
+          ? 0.28
+          : 0.1;
+  const speed =
+    mode === "listening"
+      ? 0.72 + normalizedLevel * 0.78
+      : mode === "saved"
+        ? 1.65 + normalizedLevel * 1.55
+        : mode === "idle"
+          ? 0.72
+          : 0.24;
+  const scale = mode === "listening" ? 1 - normalizedLevel * 0.204 : mode === "saved" ? 1 + normalizedLevel * 0.2145 : 1;
 
   const uniforms = useDerivedValue(
     () => ({
-      uSize: size,
-      uTime: reduceMotion ? 0 : clock.value / 1000,
-      uEnergy: energy,
-      uSaved: mode === "saved" ? 1 : 0,
+      uSize: orbSize,
+      uTime: reduceMotion ? 0 : (clock.value / 1000) * speed,
+      uActivity: activity,
     }),
-    [energy, mode, reduceMotion, size],
+    [activity, orbSize, reduceMotion, speed],
   );
-  const activeScale = 1 + level * 0.025;
 
-  if (!ORB_EFFECT) {
-    return <View style={{ width: size, height: size }} />;
-  }
+  if (!CLOUD_EFFECT) return <View style={{ width: size, height: size }} />;
 
   return (
-    <View style={{ width: size, height: size, pointerEvents: "none" }}>
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            transform: [
-              {
-                scale: breathe.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [activeScale * 0.985, activeScale * 1.015],
-                }),
-              },
-              {
-                rotate: breathe.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ["-0.8deg", "0.8deg"],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+      <View style={{ width: orbSize, height: orbSize, transform: [{ scale }] }}>
         <Canvas style={StyleSheet.absoluteFill}>
           <Fill>
-            <Shader source={ORB_EFFECT} uniforms={uniforms} />
+            <Shader source={CLOUD_EFFECT} uniforms={uniforms} />
           </Fill>
         </Canvas>
-      </Animated.View>
+      </View>
     </View>
   );
 }

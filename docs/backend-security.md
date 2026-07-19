@@ -20,6 +20,7 @@ OpenAI never sees any patient data in every stage of the product.
 | Data path | Stored form | Who can read plaintext? | Important limitation |
 | --- | --- | --- | --- |
 | ChatGPT conversation | Controlled by the selected ChatGPT product/workspace policy | Patient and OpenAI processing systems according to that policy | HeyJule cannot make the existing ChatGPT conversation zero-knowledge |
+| Mobile AI check-in context | AES-256-GCM before Redis; maximum 40 messages; two-hour TTL plus client-requested close/save deletion | Authorized HeyJule process and the configured OpenAI processing systems | HeyJule decrypts context in memory to produce the next turn; `store: false` and Redis encryption do not replace provider approval or consent |
 | MCP `new_entry` inbox | P-256 ECDH + HKDF-SHA256 + AES-256-GCM envelope for the patient device | ChatGPT already has the summary; the HeyJule MCP process sees tool arguments transiently; only the device can decrypt the stored row | Do not claim the server never handles plaintext in memory |
 | Normal patient timeline | AES-256-GCM under a server data key | Authorized HeyJule backend workloads and linked doctors | Encryption at rest is not end-to-end encryption |
 | LLM clinical-draft request | Not persisted by HeyJule; OpenAI request uses `store: false` | Authorized HeyJule process and the configured OpenAI processing systems | `store: false` is not a substitute for the required provider contract, privacy configuration, or legal review |
@@ -47,6 +48,9 @@ boundaries.
   export events.
 - Structured clinical-draft output with evidence-entry ids, server-side schema
   validation, `store: false`, and separate gates for mock-only versus live/PHI data.
+- Mobile text chat uses authenticated Chat SDK threads, pseudonymous keyed-hash
+  user ids, AES-256-GCM-encrypted Redis values, a 40-message/two-hour history
+  cap, explicit close/save deletion, masked provider errors, and `store: false`.
 - No plaintext clinical report is persisted: the patient receives it transiently,
   seals it to the selected doctor's public key, and uploads only ciphertext.
 - SQLite `secure_delete` plus WAL checkpointing after expiry cleanup. Because

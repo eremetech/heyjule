@@ -70,10 +70,14 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
       OPENAI_PHI_ENABLED: ${OPENAI_PHI_ENABLED:-false}
       HEYJULE_ALLOW_MOCK_LLM: ${HEYJULE_ALLOW_MOCK_LLM:-true}
+      REDIS_URL: redis://chat-state:6379
     expose:
       - "8787"
     volumes:
       - heyjule-api-data:/app/data
+    depends_on:
+      chat-state:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -93,7 +97,40 @@ services:
       - ALL
     stop_grace_period: 20s
 
+  chat-state:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    init: true
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --save
+      - "60"
+      - "1000"
+    expose:
+      - "6379"
+    volumes:
+      - heyjule-chat-state:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 20s
+
 volumes:
   heyjule-api-data:
+  heyjule-chat-state:
   doctor-web-identity:
   doctor-web-cache:

@@ -20,6 +20,7 @@ export type ApiConfig = {
   openaiModel: string;
   openaiPhiEnabled: boolean;
   allowMockLlm: boolean;
+  chatRedisUrl?: string;
 };
 
 function required(name: string) {
@@ -36,6 +37,8 @@ export function loadConfig(): ApiConfig {
   if (dataKey.length !== 32) throw new Error("HEYJULE_DATA_KEY must decode to exactly 32 bytes");
   const devTokens = process.env.HEYJULE_DEV_TOKENS?.trim();
   if (production && devTokens) throw new Error("HEYJULE_DEV_TOKENS is forbidden in production");
+  const chatRedisUrl = process.env.REDIS_URL?.trim() || undefined;
+  if (production && !chatRedisUrl) throw new Error("REDIS_URL is required in production");
 
   return {
     apiUrl,
@@ -63,5 +66,6 @@ export function loadConfig(): ApiConfig {
     openaiModel: process.env.OPENAI_MODEL?.trim() || "gpt-5.6",
     openaiPhiEnabled: process.env.OPENAI_PHI_ENABLED === "true",
     allowMockLlm: process.env.HEYJULE_ALLOW_MOCK_LLM === "true",
+    chatRedisUrl,
   };
 }

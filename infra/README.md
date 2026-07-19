@@ -1,10 +1,12 @@
 # Dokploy / Coolify deployment
 
 The root [`docker-compose.yml`](../docker-compose.yml) deploys two public
-services:
+services and one private state service:
 
 - `api` on internal port `8787` — the authoritative health-data and consent API
 - `doctor-web` on internal port `3000` — the Next.js dashboard and identity UI
+- `chat-state` on internal port `6379` — private Redis state for temporary,
+  application-encrypted Chat SDK context; it must not receive a public domain
 
 Create one HTTPS domain for each service in Dokploy/Coolify. For example:
 
@@ -33,11 +35,12 @@ HEYJULE_ALLOWED_ORIGINS=https://doctors.agenticsonar.com
 # Optional voice provider credential.
 XAI_API_KEY=
 
-# Required for AI-generated clinical drafts.
+# Required for patient text chat and AI-generated clinical drafts.
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.6
 
-# Pilot fixtures only. Real/live entries still require the separate PHI gate.
+# Pilot report fixtures only. Real reports and all mobile text chat require the
+# separate PHI gate.
 HEYJULE_ALLOW_MOCK_LLM=true
 OPENAI_PHI_ENABLED=false
 ```
@@ -58,6 +61,7 @@ The Compose network supplies these internal values automatically:
 - `HEYJULE_INTERNAL_API_URL=http://api:8787`
 - `HEYJULE_DOCTOR_OAUTH_JWKS_URL=http://doctor-web:3000/api/auth/jwks`
 - `HEYJULE_TRUST_PROXY=true`
+- `REDIS_URL=redis://chat-state:6379`
 
 The public Better Auth URL remains the JWT issuer, while the API fetches its
 verification keys over the private Compose network. Patient OAuth remains a
@@ -70,8 +74,13 @@ separate explicitly configured issuer.
 - `doctor-web-identity` holds only Better Auth users, accounts, sessions, and
   JWT signing keys in production.
 - `doctor-web-cache` holds the writable Next.js runtime cache.
+- `heyjule-chat-state` holds Chat SDK coordination data and AES-256-GCM
+  ciphertext. Context is limited to 40 messages, expires after two hours, and
+  is explicitly deleted when the patient closes or saves the check-in.
 
-Back up the first two volumes with encryption. This is a single-node SQLite
+Back up the identity and API database volumes with encryption. Redis is
+recoverable temporary state and should follow the deployment's short-retention
+policy rather than long-lived backups. This is a single-node SQLite
 pilot deployment, so keep both services at one replica. Migrate the repository
 adapters to managed PostgreSQL before horizontal scaling or high availability.
 

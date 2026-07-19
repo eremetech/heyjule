@@ -1,7 +1,13 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import * as Crypto from "expo-crypto";
+import { fetch as expoFetch } from "expo/fetch";
 import * as Haptics from "expo-haptics";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Markdown from "react-native-markdown-display";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -22,6 +28,7 @@ import {
   type ConversationEvent,
   type ConversationSession,
 } from "../lib/conversation-client";
+import { appConfig } from "../lib/app-config";
 import { createHeyJuleApi } from "../lib/heyjule-api";
 import { useHealthStore } from "../store/HealthStore";
 import { colors, shadows, typography } from "../theme";
@@ -36,13 +43,24 @@ type Stage = "capture" | "review" | "saved";
 type CaptureMode = "voice" | "text";
 type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "error";
 
-type Message = {
-  id: string;
-  from: "jule" | "user";
-  text: string;
-};
-
 const symptoms: SymptomKind[] = ["Headache", "Fatigue", "Nausea", "Pain", "Dizziness", "Other"];
+const quickPrompts = ["Sleep changed", "Pain or discomfort", "Energy or mood", "Something else"];
+
+function textFromMessage(message: UIMessage) {
+  return message.parts
+    .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+}
+
+function localMessage(role: "user" | "assistant", text: string): UIMessage {
+  return {
+    id: `${role}_${Crypto.randomUUID().replaceAll("-", "")}`,
+    role,
+    parts: [{ type: "text", text }],
+  };
+}
+
 function formatDuration(milliseconds: number) {
   const seconds = Math.floor(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -53,7 +71,8 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   const insets = useSafeAreaInsets();
   const { addLog } = useHealthStore();
   const auth = useAuth();
-  const api = useMemo(() => createHeyJuleApi(auth.getAccessToken), [auth.getAccessToken]);
+  const { getAccessToken } = auth;
+  const api = useMemo(() => createHeyJuleApi(getAccessToken), [getAccessToken]);
   const conversationClient = useMemo(
     () => createConversationClient(api.getVoiceToken),
     [api],
@@ -61,12 +80,10 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   const sessionRef = useRef<ConversationSession | null>(null);
   const sessionAbortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef<number | null>(null);
-  const userTranscriptRef = useRef<string[]>([]);
+  const messagesScrollRef = useRef<ScrollView | null>(null);
+  const [chatId] = useState(() => `checkin_${Crypto.randomUUID().replaceAll("-", "")}`);
   const [stage, setStage] = useState<Stage>("capture");
   const [captureMode, setCaptureMode] = useState<CaptureMode>("voice");
-  const [messages, setMessages] = useState<Message[]>([
-    { id: "opening", from: "jule", text: "What feels different today?" },
-  ]);
   const [draft, setDraft] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [selectedSymptoms, setSelectedSymptoms] = useState<SymptomKind[]>([]);
@@ -79,8 +96,73 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   const [voiceLevel, setVoiceLevel] = useState(0.08);
   const [voiceDuration, setVoiceDuration] = useState(0);
 
-  const userMessages = useMemo(() => messages.filter((message) => message.from === "user"), [messages]);
+  const chatTransport = useMemo(() => {
+    const authenticatedFetch: typeof globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      const perform = async (token: string) => {
+        const headers = new Headers(init?.headers);
+        headers.set("Authorization", `Bearer ${token}`);
+        return expoFetch(url, {
+          ...init,
+          body: init?.body ?? undefined,
+          headers,
+        } as Parameters<typeof expoFetch>[1]) as unknown as Response;
+      };
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("Sign in to continue your check-in.");
+      let response = await perform(accessToken);
+      if (response.status === 401) {
+        const refreshedToken = await getAccessToken(true);
+        if (refreshedToken) response = await perform(refreshedToken);
+      }
+      return response;
+    };
+
+    return new DefaultChatTransport({
+      api: `${appConfig.apiUrl ?? "https://api-not-configured.invalid"}/v1/patient/chat`,
+      fetch: authenticatedFetch,
+    });
+  }, [getAccessToken]);
+
+  const {
+    messages,
+    status: chatStatus,
+    error: chatError,
+    sendMessage,
+    stop: stopChat,
+    clearError,
+    setMessages,
+  } = useChat<UIMessage>({
+    id: chatId,
+    messages: [
+      {
+        id: "opening",
+        role: "assistant",
+        parts: [{ type: "text", text: "What feels different today?" }],
+      },
+    ],
+    transport: chatTransport,
+    experimental_throttle: 40,
+    onError: () => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    },
+  });
+
+  const userMessages = useMemo(() => messages.filter((message) => message.role === "user"), [messages]);
+  const chatBusy = chatStatus === "submitted" || chatStatus === "streaming";
   const voiceActive = voiceState === "connecting" || voiceState === "listening" || voiceState === "speaking";
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      messagesScrollRef.current?.scrollToEnd({ animated: chatStatus !== "streaming" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [chatStatus, messages]);
 
   useEffect(() => {
     if (!voiceActive || startedAtRef.current === null) return;
@@ -96,21 +178,22 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
     sessionAbortRef.current?.abort();
     void sessionRef.current?.end();
     sessionRef.current = null;
-  }, []);
+    void stopChat();
+    void api.deletePatientChat(chatId).catch(() => undefined);
+  }, [api, chatId, stopChat]);
 
   function handleConversationEvent(event: ConversationEvent) {
     switch (event.type) {
       case "user_transcript":
-        userTranscriptRef.current.push(event.text);
         setMessages((current) => [
           ...current,
-          { id: `user_${Date.now()}`, from: "user", text: event.text },
+          localMessage("user", event.text),
         ]);
         break;
       case "agent_text":
         setMessages((current) => [
           ...current,
-          { id: `jule_${Date.now()}`, from: "jule", text: event.text },
+          localMessage("assistant", event.text),
         ]);
         break;
       case "audio_level":
@@ -187,32 +270,48 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
 
   async function handleClose() {
     await stopRecording();
+    await stopChat();
+    await api.deletePatientChat(chatId).catch(() => undefined);
     onClose();
   }
 
   async function openReview() {
     await stopRecording();
-    const transcript = userTranscriptRef.current.join(" ");
+    await stopChat();
+    const transcript = messages
+      .filter((message) => message.role === "user")
+      .map(textFromMessage)
+      .filter(Boolean)
+      .join(" ");
     setReviewNote(transcript);
     setStage("review");
   }
 
-  function sendMessage() {
-    const text = draft.trim();
-    if (!text) return;
-    userTranscriptRef.current.push(text);
-    const nextUserCount = userMessages.length + 1;
-    const followUp =
-      nextUserCount === 1
-        ? "When did it start, and how strong is it from 1 to 5?"
-        : "Did anything make it better or worse?";
-    setMessages((current) => [
-      ...current,
-      { id: `user_${Date.now()}`, from: "user", text },
-      { id: `jule_${Date.now()}`, from: "jule", text: followUp },
-    ]);
+  async function submitMessage(value = draft) {
+    const text = value.trim();
+    if (!text || chatBusy) return;
+    if (!appConfig.apiUrl) {
+      Alert.alert(
+        "Text check-in unavailable",
+        "Set EXPO_PUBLIC_HEYJULE_API_URL to connect the app to HeyJule.",
+      );
+      return;
+    }
+    clearError();
     setDraft("");
     void Haptics.selectionAsync();
+    await sendMessage({ text });
+  }
+
+  async function retryLastResponse() {
+    const lastUserIndex = messages.findLastIndex((message) => message.role === "user");
+    const lastUserMessage = messages[lastUserIndex];
+    if (!lastUserMessage) return;
+    const text = textFromMessage(lastUserMessage);
+    if (!text) return;
+    clearError();
+    setMessages((current) => current.slice(0, lastUserIndex));
+    await sendMessage({ text });
   }
 
   function toggleSymptom(symptom: SymptomKind) {
@@ -231,6 +330,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
       source: voiceWasUsed ? "voice" : "text",
       voiceDuration: voiceWasUsed ? Math.round(voiceDuration / 1000) : undefined,
     });
+    await api.deletePatientChat(chatId).catch(() => undefined);
     setStage("saved");
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
@@ -350,8 +450,8 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
         </View>
         <SoftPressable
           onPress={() => Alert.alert(
-            "How voice mode works",
-            "While voice mode is active, audio is streamed to xAI for live responses. HeyJule saves only the transcript you review and approve.",
+            "How AI check-ins work",
+            "Voice audio is streamed to xAI for live responses. Text is sent through HeyJule to OpenAI. Text context is encrypted temporarily and deleted when you close or save; only the note you review is added to your health timeline.",
           )}
           style={styles.roundButton}
           accessibilityLabel="More options"
@@ -428,32 +528,124 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
         <View style={styles.textBody}>
           <View style={styles.textPrompt}>
             <Text style={styles.voiceTitle}>Tell me what changed.</Text>
-            <Text style={styles.voiceSubtitle}>A few words are enough.</Text>
+            <Text style={styles.voiceSubtitle}>Jule will help you shape it into a useful note.</Text>
           </View>
-          <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent} showsVerticalScrollIndicator={false}>
-            {messages.map((message) => (
-              <View key={message.id} style={[styles.message, message.from === "user" ? styles.userMessage : styles.juleMessage]}>
-                <Text style={[styles.messageText, message.from === "user" && styles.userMessageText]}>{message.text}</Text>
+          <ScrollView
+            ref={messagesScrollRef}
+            style={styles.messages}
+            contentContainerStyle={styles.messagesContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() =>
+              messagesScrollRef.current?.scrollToEnd({ animated: chatStatus !== "streaming" })
+            }
+          >
+            {messages.map((message) => {
+              const messageText = textFromMessage(message);
+              const isUser = message.role === "user";
+              if (!messageText) return null;
+              return (
+                <View key={message.id} style={[styles.messageGroup, isUser && styles.userMessageGroup]}>
+                  {!isUser ? (
+                    <View style={styles.juleByline}>
+                      <View style={styles.juleBadge}>
+                        <Ionicons name="sparkles" size={10} color={colors.coral} />
+                      </View>
+                      <Text style={styles.juleBylineText}>Jule</Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.message, isUser ? styles.userMessage : styles.juleMessage]}>
+                    {isUser ? (
+                      <Text style={[styles.messageText, styles.userMessageText]}>{messageText}</Text>
+                    ) : (
+                      <Markdown style={markdownStyles}>{messageText}</Markdown>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+            {chatStatus === "submitted" ? (
+              <View
+                style={[styles.messageGroup, styles.thinkingGroup]}
+                accessibilityLiveRegion="polite"
+                accessibilityLabel="Jule is thinking"
+              >
+                <View style={styles.juleByline}>
+                  <View style={styles.juleBadge}>
+                    <Ionicons name="sparkles" size={10} color={colors.coral} />
+                  </View>
+                  <Text style={styles.juleBylineText}>Jule</Text>
+                </View>
+                <View style={[styles.message, styles.juleMessage, styles.thinkingBubble]}>
+                  <ActivityIndicator size="small" color={colors.coral} />
+                </View>
               </View>
-            ))}
+            ) : null}
           </ScrollView>
+          {userMessages.length === 0 && chatStatus === "ready" ? (
+            <View style={styles.quickPrompts}>
+              {quickPrompts.map((prompt) => (
+                <SoftPressable
+                  key={prompt}
+                  onPress={() => void submitMessage(prompt)}
+                  style={styles.quickPrompt}
+                  accessibilityLabel={`Start with ${prompt}`}
+                >
+                  <Text style={styles.quickPromptText}>{prompt}</Text>
+                </SoftPressable>
+              ))}
+            </View>
+          ) : null}
+          {chatError ? (
+            <View style={styles.chatError} accessibilityLiveRegion="polite">
+              <Ionicons name="cloud-offline-outline" size={18} color={colors.coral} />
+              <View style={styles.chatErrorCopy}>
+                <Text style={styles.chatErrorTitle}>Jule couldn’t reply</Text>
+                <Text style={styles.chatErrorText}>Your message is still here.</Text>
+              </View>
+              <SoftPressable
+                onPress={() => {
+                  void retryLastResponse();
+                }}
+                style={styles.retryButton}
+                accessibilityLabel="Retry Jule's response"
+              >
+                <Text style={styles.retryText}>Retry</Text>
+              </SoftPressable>
+            </View>
+          ) : null}
           <View style={styles.composer}>
-            <SoftPressable onPress={() => setCaptureMode("voice")} style={styles.composerMic} accessibilityLabel="Use voice instead">
+            <SoftPressable
+              onPress={() => {
+                void stopChat();
+                setCaptureMode("voice");
+              }}
+              style={styles.composerMic}
+              accessibilityLabel="Use voice instead"
+            >
               <Ionicons name="mic-outline" size={21} color={colors.oliveDeep} />
             </SoftPressable>
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              onSubmitEditing={sendMessage}
+              onSubmitEditing={() => void submitMessage()}
               placeholder="Describe how you feel…"
               placeholderTextColor={colors.inkFaint}
               style={styles.composerInput}
               returnKeyType="send"
+              maxLength={1200}
+              accessibilityLabel="Check-in message"
             />
-            <SoftPressable onPress={sendMessage} style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]} accessibilityLabel="Send message">
-              <Ionicons name="arrow-up" size={18} color={colors.white} />
+            <SoftPressable
+              onPress={chatBusy ? () => void stopChat() : () => void submitMessage()}
+              style={[styles.sendButton, !chatBusy && !draft.trim() && styles.sendButtonDisabled]}
+              accessibilityLabel={chatBusy ? "Stop Jule's response" : "Send message"}
+              disabled={!chatBusy && !draft.trim()}
+            >
+              <Ionicons name={chatBusy ? "stop" : "arrow-up"} size={18} color={colors.white} />
             </SoftPressable>
           </View>
+          <Text style={styles.aiNotice}>AI can make mistakes. Review health information before saving.</Text>
           <SoftPressable onPress={openReview} style={styles.textReviewButton} accessibilityRole="button">
             <Text style={styles.textReviewLabel}>Review check-in</Text>
             <Ionicons name="arrow-forward" size={15} color={colors.coral} />
@@ -463,7 +655,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
 
       <View style={styles.privacyRow}>
         <Ionicons name="lock-closed-outline" size={13} color={colors.inkFaint} />
-        <Text style={styles.privacyText}>Nothing is saved until you review it.</Text>
+        <Text style={styles.privacyText}>Encrypted context is temporary. Only your reviewed note is saved.</Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -633,8 +825,36 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 12,
   },
+  messageGroup: {
+    maxWidth: "86%",
+    alignSelf: "flex-start",
+  },
+  userMessageGroup: {
+    alignSelf: "flex-end",
+    alignItems: "flex-end",
+  },
+  juleByline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 5,
+    marginLeft: 4,
+  },
+  juleBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(245,200,190,0.28)",
+  },
+  juleBylineText: {
+    color: colors.inkFaint,
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
   message: {
-    maxWidth: "82%",
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderRadius: 19,
@@ -656,6 +876,68 @@ const styles = StyleSheet.create({
   },
   userMessageText: {
     color: colors.white,
+  },
+  thinkingGroup: {
+    minWidth: 76,
+  },
+  thinkingBubble: {
+    alignSelf: "flex-start",
+    paddingVertical: 15,
+  },
+  quickPrompts: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    paddingVertical: 9,
+  },
+  quickPrompt: {
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.lineStrong,
+    backgroundColor: "rgba(255,255,255,0.48)",
+  },
+  quickPromptText: {
+    color: colors.inkSoft,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  chatError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: "rgba(245,200,190,0.20)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(233,128,121,0.28)",
+  },
+  chatErrorCopy: {
+    flex: 1,
+  },
+  chatErrorTitle: {
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  chatErrorText: {
+    color: colors.inkFaint,
+    fontSize: 10,
+    marginTop: 1,
+  },
+  retryButton: {
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  retryText: {
+    color: colors.coral,
+    fontSize: 12,
+    fontWeight: "700",
   },
   composer: {
     flexDirection: "row",
@@ -693,6 +975,13 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.36,
+  },
+  aiNotice: {
+    color: colors.inkFaint,
+    fontSize: 9,
+    lineHeight: 13,
+    textAlign: "center",
+    marginTop: 7,
   },
   textReviewButton: {
     alignSelf: "center",
@@ -866,3 +1155,36 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
 });
+
+const markdownStyles = {
+  body: {
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 7,
+  },
+  strong: {
+    fontWeight: "700" as const,
+  },
+  bullet_list: {
+    marginVertical: 3,
+  },
+  ordered_list: {
+    marginVertical: 3,
+  },
+  list_item: {
+    marginVertical: 1,
+  },
+  link: {
+    color: colors.coral,
+    textDecorationLine: "underline" as const,
+  },
+  code_inline: {
+    color: colors.ink,
+    backgroundColor: "rgba(136,148,96,0.10)",
+    borderRadius: 4,
+  },
+};

@@ -22,6 +22,10 @@ ChatGPT MCP handoff, consented doctor access, and end-to-end encrypted exports.
 - Metadata-only audit events and automatic encrypted-export expiry cleanup.
 - Authenticated, five-minute xAI Voice API client-token minting without exposing
   the permanent provider key to the patient app.
+- Authenticated Vercel Chat SDK Web adapter at `/v1/patient/chat`, backed by AI
+  SDK streaming and the OpenAI Responses API (`store: false`). Multi-turn state
+  uses pseudonymous thread ids and an AES-256-GCM wrapper around Redis, expires
+  after two hours, and is deleted when the patient closes or saves.
 
 The security boundary and remaining production work are documented in
 [`../../docs/backend-security.md`](../../docs/backend-security.md). Mobile
@@ -59,6 +63,8 @@ audience binding, and discovery metadata.
 | `POST` | `/v1/patient/reports/generate` | patient / `report:write` | Generate a structured clinical draft from selected linked-patient data |
 | `GET` | `/v1/patient/exports` | patient / `report:write` | List the patient's active encrypted exports |
 | `POST` | `/v1/voice/token` | patient / `patient:data:write` | Mint a short-lived xAI Voice API client token |
+| `POST` | `/v1/patient/chat` | patient / `patient:data:write` | Stream a privacy-gated AI check-in through the Chat SDK Web adapter |
+| `DELETE` | `/v1/patient/chat/:conversationId` | patient / `patient:data:write` | Delete the authenticated patient's temporary encrypted chat context |
 | `POST` | `/v1/doctor/invites` | doctor / `care:invite` | Create a seven-day single-use patient invite |
 | `GET` | `/v1/doctor/invites` | doctor / `care:invite` | List pending invites |
 | `DELETE` | `/v1/doctor/invites/:id` | doctor / `care:invite` | Revoke a pending invite |

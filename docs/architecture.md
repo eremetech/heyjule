@@ -30,9 +30,13 @@ user-facing systems sit on one shared backend.
 
 ### 1. Patient onboarding & data capture
 1. The patient app binds its secure local journal to the authenticated patient subject.
-2. In pilot mode it uploads deterministic mock conversations, ChatGPT MCP
+2. A patient text check-in streams through Vercel Chat SDK and AI SDK to the
+   privacy-gated OpenAI Responses API. Short-lived multi-turn context is stored
+   under a pseudonymous thread id, encrypted before Redis, and deleted on
+   close/save; only the reviewed note becomes a timeline entry.
+3. In pilot mode it uploads deterministic mock conversations, ChatGPT MCP
    summaries, Apple Health-shaped measurements, PROMs, and ePA-shaped treatments.
-3. Every entry carries a typed source and a `mock`/`live` provenance marker and
+4. Every entry carries a typed source and a `mock`/`live` provenance marker and
    is encrypted at rest by `services/api`.
 
 ### 2. Linking a doctor

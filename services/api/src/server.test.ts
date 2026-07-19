@@ -180,6 +180,40 @@ test("the authenticated session endpoint binds a mobile journal to its patient a
   }
 });
 
+test("the patient chat route bridges authenticated AI SDK streams and deletes temporary context", async () => {
+  const app = await setup();
+  const body = {
+    id: "checkin_route_test",
+    messages: [
+      {
+        id: "message_route_test",
+        role: "user",
+        parts: [{ type: "text", text: "I feel more tired today." }],
+      },
+    ],
+  };
+  try {
+    const anonymous = await api(app.origin, "/v1/patient/chat", { body });
+    assert.equal(anonymous.status, 401);
+
+    const response = await api(app.origin, "/v1/patient/chat", {
+      token: "patient-token",
+      body,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-vercel-ai-ui-message-stream"), "v1");
+    assert.match(await response.text(), /Text check-ins are not configured yet/u);
+
+    const deleted = await api(app.origin, "/v1/patient/chat/checkin_route_test", {
+      method: "DELETE",
+      token: "patient-token",
+    });
+    assert.equal(deleted.status, 204);
+  } finally {
+    await app.close();
+  }
+});
+
 test("voice tokens are short-lived, patient-authenticated, and keep the xAI key server-side", async () => {
   const config = { ...testConfig(), xaiApiKey: "xai-server-secret" };
   const database = new ApiDatabase(":memory:", config.dataKey);

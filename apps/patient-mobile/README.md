@@ -8,7 +8,9 @@ Expo / React Native app for private daily symptom check-ins and patient-controll
 - Continuously morphing SVG orb with idle, listening, thinking, and saved states.
 - Full-duplex xAI Voice Agent conversations with live transcription, barge-in,
   PCM streaming/playback, duration, and audio metering.
-- Text check-in with contextual follow-up prompts.
+- Vercel Chat SDK / AI SDK text check-in with authenticated streaming, native
+  Markdown, quick starts, stop/retry states, automatic scrolling, and concise
+  context-aware follow-up questions.
 - Review and save flow for notes, symptom tags, severity, and treatments.
 - Progress overview with symptom intensity, frequent symptoms, and wearable summary cards.
 - Scoped sharing UI for symptoms, wearables, treatments, and conversation transcripts.
@@ -60,6 +62,11 @@ before upload, and acknowledges backend deletion only after both saves succeed.
 Failed uploads remain pending and retry on foregrounding and periodically.
 
 The following integrations remain intentionally separate:
+
+- Text mode uses the Chat SDK Web adapter through `services/api`. The API keeps
+  at most 40 encrypted context messages for two hours and the app requests
+  deletion on close/save. Only the patient-edited review note enters the health
+  timeline. Real text input is blocked unless `OPENAI_PHI_ENABLED=true`.
 
 - `src/lib/conversation-client.ts` connects directly to xAI using a five-minute
   ephemeral token minted by `services/api`. The permanent `XAI_API_KEY` is

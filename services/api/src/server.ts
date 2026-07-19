@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { createRedisState } from "@chat-adapter/state-redis";
 import {
   assertValidPublicKey,
   doctorExportEnvelopeContext,
@@ -12,12 +14,16 @@ import type {
   PatientEntry,
 } from "@heyjule/shared-types";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { LanguageModel } from "ai";
+import type { StateAdapter } from "chat";
 import { ZodError } from "zod";
 import { createAuthenticator, hasAccess, type Authenticate, type Principal } from "./auth.ts";
 import { generateClinicalReport, selectReportEntries } from "./clinical-report.ts";
 import { loadConfig, type ApiConfig } from "./config.ts";
 import { ApiDatabase } from "./db.ts";
+import { createEncryptedChatState } from "./encrypted-chat-state.ts";
 import { createMcpServer } from "./mcp.ts";
+import { createPatientChat } from "./patient-chat.ts";
 import {
   encryptedExportSchema,
   generateClinicalReportSchema,
@@ -58,6 +64,8 @@ type AppOptions = {
   database?: ApiDatabase;
   authenticate?: Authenticate;
   fetch?: typeof fetch;
+  chatState?: StateAdapter;
+  chatModel?: LanguageModel;
 };
 
 function setSecurityHeaders(response: ServerResponse) {
@@ -86,7 +94,7 @@ function text(response: ServerResponse, status: number, value: string) {
   response.end(value);
 }
 
-async function readJson(request: IncomingMessage) {
+async function readBody(request: IncomingMessage) {
   const chunks: Buffer[] = [];
   let length = 0;
   for await (const chunk of request) {
@@ -95,12 +103,81 @@ async function readJson(request: IncomingMessage) {
     if (length > MAX_BODY_BYTES) throw new HttpError(413, "body_too_large");
     chunks.push(buffer);
   }
-  if (length === 0) return {};
+  return Buffer.concat(chunks);
+}
+
+async function readJson(request: IncomingMessage) {
+  const body = await readBody(request);
+  if (body.length === 0) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+    return JSON.parse(body.toString("utf8")) as unknown;
   } catch {
     throw new HttpError(400, "invalid_json");
   }
+}
+
+function requestHeaders(request: IncomingMessage) {
+  const headers = new Headers();
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    const name = request.rawHeaders[index];
+    const value = request.rawHeaders[index + 1];
+    if (name && value) headers.append(name, value);
+  }
+  return headers;
+}
+
+async function toFetchRequest(
+  request: IncomingMessage,
+  url: URL,
+  signal: AbortSignal,
+) {
+  const body = await readBody(request);
+  return new Request(url, {
+    method: request.method,
+    headers: requestHeaders(request),
+    body: body.length > 0 ? new Uint8Array(body) : undefined,
+    signal,
+  });
+}
+
+async function pipeFetchResponse(source: Response, target: ServerResponse) {
+  target.statusCode = source.status;
+  const hopByHopHeaders = new Set([
+    "connection",
+    "content-encoding",
+    "content-length",
+    "keep-alive",
+    "transfer-encoding",
+  ]);
+  source.headers.forEach((value, name) => {
+    if (!hopByHopHeaders.has(name.toLowerCase())) target.setHeader(name, value);
+  });
+  if (!source.body) {
+    target.end();
+    return;
+  }
+
+  const reader = source.body.getReader();
+  try {
+    while (!target.destroyed) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!target.write(Buffer.from(value))) {
+        await new Promise<void>((resolve) => {
+          const settled = () => {
+            target.off("drain", settled);
+            target.off("close", settled);
+            resolve();
+          };
+          target.once("drain", settled);
+          target.once("close", settled);
+        });
+      }
+    }
+  } finally {
+    if (target.destroyed) await reader.cancel().catch(() => undefined);
+  }
+  if (!target.destroyed) target.end();
 }
 
 function matchPath(pathname: string, pattern: RegExp) {
@@ -191,6 +268,19 @@ export function createApiServer(options: AppOptions) {
   const rateLimit = createRateLimiter(config.trustProxy);
   const fetchFromProvider = options.fetch ?? fetch;
   const resourceMetadataUrl = `${config.apiUrl}/.well-known/oauth-protected-resource`;
+  const unencryptedChatState =
+    options.chatState ??
+    (config.chatRedisUrl
+      ? createRedisState({ url: config.chatRedisUrl, keyPrefix: "heyjule-chat-v1" })
+      : createMemoryState());
+  const chatState = createEncryptedChatState(unencryptedChatState, config.dataKey);
+  const patientChat = createPatientChat({
+    config,
+    authenticate,
+    state: chatState,
+    fetch: fetchFromProvider,
+    model: options.chatModel,
+  });
 
   const server = createServer(async (request, response) => {
     setSecurityHeaders(response);
@@ -264,11 +354,34 @@ export function createApiServer(options: AppOptions) {
 
       configureRestCors(request, response, config.allowedOrigins);
       if (request.method === "OPTIONS") return empty(response, 204);
+
+      if (url.pathname === "/v1/patient/chat" && request.method === "POST") {
+        const controller = new AbortController();
+        request.once("aborted", () => controller.abort());
+        response.once("close", () => {
+          if (!response.writableEnded) controller.abort();
+        });
+        const webRequest = await toFetchRequest(request, url, controller.signal);
+        const webResponse = await patientChat.chat.webhooks.web(webRequest);
+        await pipeFetchResponse(webResponse, response);
+        return;
+      }
+
       const principal = await authenticate(request.headers.authorization);
 
       if (url.pathname === "/v1/session" && request.method === "GET") {
         if (!principal) throw new HttpError(401, "authentication_required");
         return json(response, 200, { subject: principal.sub, role: principal.role });
+      }
+
+      const patientChatPath = matchPath(
+        url.pathname,
+        /^\/v1\/patient\/chat\/(?<id>[A-Za-z0-9_-]+)$/u,
+      );
+      if (patientChatPath && request.method === "DELETE") {
+        const patient = requireAccess(principal, "patient", "patient:data:write");
+        await patientChat.deleteHistory(patient.sub, idSchema.parse(patientChatPath.id));
+        return empty(response, 204);
       }
 
       if (url.pathname === "/v1/voice/token" && request.method === "POST") {
@@ -622,13 +735,17 @@ export function createApiServer(options: AppOptions) {
 
   const cleanup = setInterval(() => database.cleanupExpired(), 60_000);
   cleanup.unref();
-  server.on("close", () => clearInterval(cleanup));
-  return { server, database };
+  server.on("close", () => {
+    clearInterval(cleanup);
+    void patientChat.chat.shutdown();
+  });
+  return { server, database, patientChat };
 }
 
 async function main() {
   const config = loadConfig();
-  const { server } = createApiServer({ config });
+  const { server, patientChat } = createApiServer({ config });
+  await patientChat.chat.initialize();
   server.listen(config.port, "0.0.0.0", () => {
     console.log(`HeyJule API listening on http://0.0.0.0:${config.port}`);
   });
