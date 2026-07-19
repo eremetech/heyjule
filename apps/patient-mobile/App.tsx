@@ -85,7 +85,7 @@ export default function App() {
   const [scrollFraction, setScrollFraction] = useState(1);
   const phaseAnim = useRef(new Animated.Value(PHASES.indexOf(days[days.length - 1].phase))).current;
   const lastPhase = useRef<Phase>(days[days.length - 1].phase);
-  const didInitialScroll = useRef(false);
+  const mountedAt = useRef(Date.now());
 
   const bgColor = phaseAnim.interpolate({
     inputRange: [0, 1, 2, 3],
@@ -224,8 +224,8 @@ export default function App() {
               onLayout={(e) => (layout.current.viewport = e.nativeEvent.layout.height)}
               onContentSizeChange={(_, h) => {
                 layout.current.content = h;
-                if (!didInitialScroll.current) {
-                  didInitialScroll.current = true;
+                // keep pinning to today while the initial layout settles
+                if (Date.now() - mountedAt.current < 1500) {
                   scrollRef.current?.scrollToEnd({ animated: false });
                 }
               }}
@@ -233,16 +233,16 @@ export default function App() {
               {days.map((d) => {
                 const items = itemsByDay.get(d.iso) ?? [];
                 const isToday = d.iso === todayIso;
+                // Quiet days stay invisible — the vine carries the timeline.
+                if (items.length === 0 && !isToday) return null;
                 return (
                   <View key={d.iso}>
                     <View style={styles.dayRule}>
                       <Text style={[styles.dayDate, isToday && styles.dayDateToday]}>
-                        {isToday ? 'TODAY' : d.iso.slice(5).replace('-', '·')}
+                        {isToday ? 'TODAY' : d.iso.slice(5).replace('-', ' · ')}
                       </Text>
-                      <View style={styles.dayLine} />
                       <Text style={styles.dayMeta}>
-                        CD{d.cycleDay} {d.phase.slice(0, 3)} · {Math.round(d.rhr)}bpm ·{' '}
-                        {d.sleepHours.toFixed(1)}h
+                        CD {d.cycleDay} · {d.phase}
                       </Text>
                     </View>
                     {items.map((it) =>
@@ -386,9 +386,14 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   headerMeta: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoMed,
     fontSize: 10,
-    color: colors.muted,
+    color: colors.ink,
+    backgroundColor: 'rgba(182, 223, 72, 0.4)',
+    borderRadius: 999,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    overflow: 'hidden',
   },
   toggle: {
     marginLeft: 'auto',
@@ -416,31 +421,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 10,
+    marginTop: 16,
     marginBottom: 8,
   },
   dayDate: {
     fontFamily: fonts.monoMed,
     fontSize: 9,
     letterSpacing: 1,
-    color: colors.inkSoft,
+    color: colors.ink,
+    backgroundColor: colors.paper,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    overflow: 'hidden',
   },
   dayDateToday: {
     backgroundColor: colors.tennis,
-    color: colors.ink,
-    borderRadius: 999,
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    overflow: 'hidden',
-  },
-  dayLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(23,23,20,0.12)',
   },
   dayMeta: {
     fontFamily: fonts.mono,
-    fontSize: 8,
+    fontSize: 9,
     color: colors.muted,
   },
   outflowHandle: {

@@ -5,25 +5,25 @@
 export const colors = {
   ink: '#171714',
   inkSoft: '#45453F',
-  // token kept from v1 but now the light concrete surface, NOT beige
-  cream: '#E9E9E4',
-  creamDeep: '#DBDBD5',
-  pistachio: '#9FBE4F',
-  pistachioDeep: '#66832F',
-  tennis: '#B4DC4C',
-  tennisGlow: 'rgba(180, 220, 76, 0.5)',
-  muted: '#7C7C74',
-  rule: '#CBCBC4',
-  paper: '#F9F9F5', // card white
+  // token kept from v1 but now an airy green-white surface, NOT beige, NOT gray
+  cream: '#F1F3EA',
+  creamDeep: '#E3E7D8',
+  pistachio: '#A3C55B',
+  pistachioDeep: '#6C8A34',
+  tennis: '#B6DF48',
+  tennisGlow: 'rgba(182, 223, 72, 0.5)',
+  muted: '#82827A',
+  rule: '#D8DCCC',
+  paper: '#FFFFFF', // card white
 };
 
 // The cycle phase is the ambient temperature of the surface itself —
-// light, alive whispers of hue inside the concrete, never beige.
+// light, optimistic pastels. Never beige, never gloom.
 export const phaseTint: Record<Phase, string> = {
-  menstrual: '#EFE1E1', // soft rose
-  follicular: '#E2EBD8', // fresh green
-  ovulation: '#EAF2CB', // brightest, lime
-  luteal: '#EBE8E1', // quiet warm-gray
+  menstrual: '#F7E7E8', // soft rose
+  follicular: '#EAF2DC', // fresh green
+  ovulation: '#F0F7CD', // brightest, lime
+  luteal: '#F0EEE8', // calm neutral-light
 };
 
 export type Phase = 'menstrual' | 'follicular' | 'ovulation' | 'luteal';
