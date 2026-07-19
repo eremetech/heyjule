@@ -72,6 +72,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   const [treatment, setTreatment] = useState("");
   const [voiceWasUsed, setVoiceWasUsed] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [recordingSaved, setRecordingSaved] = useState(false);
 
   const level = normalizeMetering(recorderState.metering);
   const userMessages = useMemo(() => messages.filter((message) => message.from === "user"), [messages]);
@@ -98,7 +99,9 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
     if (!recorderState.isRecording) return;
     await recorder.stop();
     await setAudioModeAsync({ allowsRecording: false });
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setRecordingSaved(true);
+    setTimeout(() => setRecordingSaved(false), 2000);
   }
 
   async function handleClose() {
@@ -309,6 +312,12 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
               <Text style={styles.endText}>End</Text>
             </SoftPressable>
           </View>
+          {recordingSaved && (
+            <View style={styles.savedNotification}>
+              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              <Text style={styles.savedNotificationText}>Note saved</Text>
+            </View>
+          )}
         </View>
       ) : (
         <View style={styles.textBody}>
@@ -472,6 +481,22 @@ const styles = StyleSheet.create({
   endText: {
     color: colors.coral,
     fontSize: 12,
+    fontWeight: "600",
+  },
+  savedNotification: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginVertical: 12,
+    borderRadius: 18,
+    backgroundColor: "rgba(245,200,190,0.24)",
+    alignSelf: "center",
+  },
+  savedNotificationText: {
+    color: colors.coral,
+    fontSize: 14,
     fontWeight: "600",
   },
   privacyRow: {

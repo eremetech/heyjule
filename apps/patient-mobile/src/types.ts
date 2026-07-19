@@ -31,4 +31,4 @@ export type ShareGrant = {
   status: "active" | "revoked";
 };
 
-export type AppRoute = "home" | "checkin" | "health";
+export type AppRoute = "home" | "checkin" | "health" | "journal" | "share";
