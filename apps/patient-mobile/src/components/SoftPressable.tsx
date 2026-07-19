@@ -1,6 +1,7 @@
 import { useState, type PropsWithChildren } from "react";
 import {
   Animated,
+  Platform,
   Pressable,
   type PressableProps,
   type StyleProp,
@@ -8,6 +9,8 @@ import {
 } from "react-native";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+// react-native-web has no native animated module and warns on every press.
+const useNativeDriver = Platform.OS !== "web";
 
 type SoftPressableProps = PropsWithChildren<
   PressableProps & {
@@ -37,7 +40,7 @@ export function SoftPressable({
           damping: 22,
           stiffness: 320,
           mass: 0.7,
-          useNativeDriver: true,
+          useNativeDriver,
         }).start();
         onPressIn?.(event);
       }}
@@ -47,7 +50,7 @@ export function SoftPressable({
           damping: 19,
           stiffness: 250,
           mass: 0.65,
-          useNativeDriver: true,
+          useNativeDriver,
         }).start();
         onPressOut?.(event);
       }}
