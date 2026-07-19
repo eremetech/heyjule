@@ -1,7 +1,8 @@
 # Patient mobile ↔ backend contract
 
-This document is the handoff for the mobile implementation. No files under
-`apps/patient-mobile` were changed as part of the backend work.
+The patient app implements the device registration, sealed inbox pickup, local
+durability, patient-entry sync, and acknowledgement ordering below. The
+doctor-only export contract remains the next patient-app integration boundary.
 
 ## Dependencies and shared code
 
@@ -16,6 +17,11 @@ This document is the handoff for the mobile implementation. No files under
 Required patient scopes are `device:write entry:claim patient:data:write
 patient:data:read report:write`. ChatGPT separately receives `entry:write` after
 the patient links the same account.
+
+Before syncing a local journal, call authenticated `GET /v1/session` and bind
+that journal to the returned patient `subject`. Refuse to upload if a later
+session has a different subject; this prevents one person's offline records
+from being copied into another account after an account switch.
 
 ## 1. Create and register the device encryption key
 

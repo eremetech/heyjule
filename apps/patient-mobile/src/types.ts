@@ -1,3 +1,5 @@
+import type { ChatSummaryPayload } from "@heyjule/shared-types";
+
 export type SymptomKind = "Headache" | "Fatigue" | "Nausea" | "Pain" | "Dizziness" | "Other";
 
 export type SymptomLog = {
@@ -7,8 +9,11 @@ export type SymptomLog = {
   symptoms: SymptomKind[];
   severity: number;
   treatment?: string;
-  source: "text" | "voice";
+  source: "text" | "voice" | "chat_summary";
   voiceDuration?: number;
+  remoteEntryId?: string;
+  syncStatus?: "pending" | "synced";
+  chatSummary?: ChatSummaryPayload;
 };
 
 export type ShareScope = {

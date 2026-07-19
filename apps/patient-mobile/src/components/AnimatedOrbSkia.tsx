@@ -11,9 +11,7 @@ type AnimatedOrbProps = {
   level?: number;
 };
 
-// SkSL translation of the supplied Three.js gyroid ray-marcher. Keeping
-// the effect in Skia means the same GPU shader runs on iOS, Android, and web.
-const FRACTAL_EFFECT = Skia.RuntimeEffect.Make(`
+const ORB_EFFECT = Skia.RuntimeEffect.Make(`
   uniform float uSize;
   uniform float uTime;
   uniform float uEnergy;
@@ -29,43 +27,6 @@ const FRACTAL_EFFECT = Skia.RuntimeEffect.Make(`
     return fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
   }
 
-  float hash31(float3 p) {
-    p = fract(p * 0.1031);
-    p += dot(p, p.yzx + 33.33);
-    return fract((p.x + p.y) * p.z);
-  }
-
-  float smoothMin(float a, float b, float k) {
-    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
-    return mix(b, a, h) - k * h * (1.12 - h);
-  }
-
-  float gyroidMap(float3 p, float time) {
-    float d = 100.2;
-    float scale = 0.4;
-    p += float3(12.6, 4.4, 5.569);
-
-    for (int layer = 0; layer < 3; layer++) {
-      p.xy = rotate2(p.xy, time * 0.0262 + 0.2);
-      p.yz = rotate2(p.yz, time * 0.0393 - 0.1);
-      float field = dot(sin(p), cos(p.zxy));
-      float gyroid = sqrt(field * field + 0.055) - 0.137;
-      d = smoothMin(d, gyroid / abs(scale), 0.15);
-      p = p * 0.7602 + float3(-1.7, 1.2, 3.5);
-      scale *= 2.196;
-    }
-    return d;
-  }
-
-  float3 palette(float phase) {
-    float blend = sin(phase * 1.4) * 0.5 + 0.5;
-    // Theme colors converted from sRGB to linear light before tone mapping.
-    float3 coral = float3(0.814, 0.216, 0.191);
-    float3 peach = float3(0.896, 0.485, 0.205);
-    float3 sage = float3(0.402, 0.468, 0.253);
-    return mix(mix(coral, peach, blend), sage, uSaved * 0.72);
-  }
-
   half4 main(float2 fragCoord) {
     float2 uv = (fragCoord - float2(uSize * 0.5)) / (uSize * 0.5);
     uv.y = -uv.y;
@@ -74,55 +35,83 @@ const FRACTAL_EFFECT = Skia.RuntimeEffect.Make(`
       return half4(0.0);
     }
 
-    float zExtent = sqrt(max(0.0, 1.0 - radius2));
+    float radius = sqrt(radius2);
+    float sphereDepth = sqrt(max(0.0, 1.0 - radius2));
     float time = uTime;
-    float spin = time * -0.65;
-    float3 glow = mix(float3(0.065, 0.005, 0.007), float3(0.018, 0.032, 0.009), uSaved);
-    float jitter = hash21(fragCoord) * 0.08;
+    float motion = time * (0.16 + uEnergy * 0.10);
 
-    // March through the glass sphere and accumulate its nested gyroid field.
-    for (int marchIndex = 0; marchIndex < 18; marchIndex++) {
-      float progress = (float(marchIndex) + jitter) / 17.0;
-      float z = mix(zExtent, -zExtent, progress);
-      float3 p = float3(uv.x, uv.y, z) * 2.655;
-      p.xz = rotate2(p.xz, spin);
+    float3 pearl = float3(0.992, 0.978, 0.972);
+    float3 blush = float3(0.982, 0.625, 0.615);
+    float3 coral = float3(0.935, 0.225, 0.245);
+    float3 hotPink = float3(0.938, 0.145, 0.430);
+    float3 peach = float3(0.988, 0.710, 0.610);
+    float3 sage = float3(0.667, 0.714, 0.541);
 
-      float distanceToField = gyroidMap(p, time);
-      float edge = smoothstep(1.0, 0.76, length(float3(uv, z)));
-      float filament = exp(-abs(distanceToField - 0.10) * 21.0);
-      float depthWeight = 0.35 + sin(progress * 3.14159) * 0.65;
-      float intensity = filament * edge * depthWeight * (0.14 + uEnergy * 0.13);
+    float3 volumeColor = float3(0.0);
+    float volumeAlpha = 0.0;
+    for (int sampleIndex = 0; sampleIndex < 30; sampleIndex++) {
+      float progress = (float(sampleIndex) + 0.5) / 30.0;
+      float z = mix(-sphereDepth, sphereDepth, progress);
+      float3 p = float3(uv.x, uv.y, z);
+      p.xz = rotate2(p.xz, motion * 0.72);
+      p.yz = rotate2(p.yz, -0.34 + sin(motion * 0.46) * 0.34);
+      p.xy = rotate2(p.xy, sin(motion * 0.31) * 0.16);
 
-      float phase = length(p) * -0.4 + time * 0.1;
-      float aberration = 0.0698;
-      float3 color = float3(
-        palette(phase + aberration).r,
-        palette(phase).g,
-        palette(phase - aberration).b
-      );
-      glow += color * intensity;
+      float sheetSurface =
+        sin(p.x * 2.75 + motion * 1.8) * 0.20 +
+        sin(p.z * 2.15 - motion * 1.35) * 0.15 +
+        sin((p.x - p.z) * 5.8 + motion * 0.8) * 0.045;
+      float sheetDistance = abs(p.y - sheetSurface - 0.05);
+      float sheet = 1.0 - smoothstep(0.07, 0.285 + uEnergy * 0.035, sheetDistance);
+      float sheetEdge = exp(-abs(sheetDistance - 0.205) * 31.0);
+      float crease =
+        pow(0.5 + 0.5 * sin(p.x * 7.2 - p.z * 4.6 + motion * 1.4), 18.0) *
+        sheet;
 
-      float3 particleCell = floor(p * 20.0 + float3(time * 0.7, -time, time * 0.24));
-      float particle = step(0.986 - uEnergy * 0.006, hash31(particleCell));
-      glow += float3(1.0, 0.86, 0.72) * particle * edge * (0.008 + uEnergy * 0.018);
+      float backSurface =
+        -0.37 +
+        sin(p.x * 1.7 - motion * 0.8 + 1.5) * 0.17 +
+        sin(p.z * 2.0 + motion * 0.55) * 0.08;
+      float backSheet = 1.0 - smoothstep(0.08, 0.34, abs(p.y - backSurface));
+
+      float3 sheetColor = mix(blush, coral, clamp(0.46 + p.z * 0.38, 0.0, 1.0));
+      sheetColor = mix(sheetColor, hotPink, sheetEdge * 0.28);
+      sheetColor = mix(sheetColor, float3(1.0, 0.91, 0.90), crease * 0.55);
+      sheetColor = mix(sheetColor, sage, uSaved * 0.72);
+
+      float localAlpha = sheet * (0.068 + uEnergy * 0.018);
+      localAlpha += backSheet * 0.018;
+      float3 localColor = mix(sheetColor, peach, backSheet * 0.58);
+      localAlpha *= 0.48 + sphereDepth * 0.52;
+      localAlpha = clamp(localAlpha, 0.0, 0.16);
+
+      volumeColor += (1.0 - volumeAlpha) * localColor * localAlpha;
+      volumeAlpha += (1.0 - volumeAlpha) * localAlpha;
     }
 
-    // A crisp front layer keeps the organic structure legible on a small phone display.
-    float3 surfacePoint = float3(uv.x, uv.y, zExtent) * 2.655;
-    surfacePoint.xz = rotate2(surfacePoint.xz, spin);
-    float surfaceField = gyroidMap(surfacePoint, time);
-    float surfaceFilament = exp(-abs(surfaceField - 0.10) * 32.0);
-    glow += palette(length(surfacePoint) * -0.4 + time * 0.1) * surfaceFilament * (0.58 + uEnergy * 0.24);
+    float3 color = pearl;
+    float lowerHaze =
+      exp(-dot(uv - float2(0.04, -0.34), uv - float2(0.04, -0.34)) * 2.5) *
+      (1.0 - smoothstep(0.38, 1.0, radius));
+    color = mix(color, peach, lowerHaze * 0.22);
+    color = mix(color, volumeColor / max(volumeAlpha, 0.001), volumeAlpha * 0.94);
 
-    float rim = pow(clamp(1.0 - zExtent, 0.0, 1.0), 4.0);
-    float softLight = pow(max(zExtent - uv.y * 0.24, 0.0), 3.0);
-    glow += palette(time * 0.04) * softLight * 0.035;
-    glow += mix(float3(0.89, 0.18, 0.15), float3(0.32, 0.42, 0.18), uSaved) * rim * 0.48;
-    glow = glow / (1.05 + glow);
-    glow = pow(max(glow, float3(0.0)), float3(0.4545));
+    float fresnel = pow(clamp(1.0 - sphereDepth, 0.0, 1.0), 2.4);
+    float highlight = exp(-dot(uv - float2(-0.38, -0.48), uv - float2(-0.38, -0.48)) * 10.0);
+    float lowerGlass = fresnel * smoothstep(-0.05, 0.95, uv.y);
+    float sideFringe = fresnel * smoothstep(0.12, 0.95, uv.x);
+    color = mix(color, float3(1.0), highlight * 0.68 + fresnel * 0.22);
+    color = mix(color, float3(0.74, 0.88, 0.90), lowerGlass * 0.18);
+    color = mix(color, float3(0.98, 0.55, 0.76), sideFringe * 0.16);
 
-    float alpha = smoothstep(1.0, 0.955, sqrt(radius2));
-    return half4(half3(glow), half(alpha));
+    float grain = (hash21(fragCoord + time) - 0.5) * 0.012;
+    color += grain;
+
+    float shell = 1.0 - smoothstep(0.972, 1.0, radius);
+    float outline = exp(-abs(radius - 0.965) * 125.0);
+    color = mix(color, float3(0.70, 0.75, 0.78), outline * 0.38);
+    float alpha = shell * (0.91 + fresnel * 0.06);
+    return half4(half3(clamp(color, 0.0, 1.0)), half(alpha));
   }
 `);
 
@@ -175,7 +164,7 @@ export function AnimatedOrb({ size, mode = "idle", level = 0 }: AnimatedOrbProps
   );
   const activeScale = 1 + level * 0.025;
 
-  if (!FRACTAL_EFFECT) {
+  if (!ORB_EFFECT) {
     return <View style={{ width: size, height: size }} />;
   }
 
@@ -204,7 +193,7 @@ export function AnimatedOrb({ size, mode = "idle", level = 0 }: AnimatedOrbProps
       >
         <Canvas style={StyleSheet.absoluteFill}>
           <Fill>
-            <Shader source={FRACTAL_EFFECT} uniforms={uniforms} />
+            <Shader source={ORB_EFFECT} uniforms={uniforms} />
           </Fill>
         </Canvas>
       </Animated.View>

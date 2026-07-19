@@ -238,6 +238,11 @@ export function createApiServer(options: AppOptions) {
       if (request.method === "OPTIONS") return empty(response, 204);
       const principal = await authenticate(request.headers.authorization);
 
+      if (url.pathname === "/v1/session" && request.method === "GET") {
+        if (!principal) throw new HttpError(401, "authentication_required");
+        return json(response, 200, { subject: principal.sub, role: principal.role });
+      }
+
       if (url.pathname === "/v1/devices" && request.method === "PUT") {
         const patient = requireAccess(principal, "patient", "device:write");
         const body = registerDeviceSchema.parse(await readJson(request));

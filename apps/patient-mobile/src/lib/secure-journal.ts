@@ -5,6 +5,7 @@ import type { ShareGrant, SymptomLog } from "../types";
 
 const LOGS_KEY = "heyjule.symptom-logs.v1";
 const GRANTS_KEY = "heyjule.share-grants.v1";
+const OWNER_KEY = "heyjule.journal-owner.v1";
 const volatileWebStore = new Map<string, string>();
 
 async function readValue(key: string) {
@@ -34,4 +35,10 @@ export const secureJournal = {
   writeLogs: (logs: SymptomLog[]) => writeValue(LOGS_KEY, JSON.stringify(logs)),
   readGrants: () => readJson<ShareGrant[]>(GRANTS_KEY, []),
   writeGrants: (grants: ShareGrant[]) => writeValue(GRANTS_KEY, JSON.stringify(grants)),
+  claimOwner: async (subject: string) => {
+    const owner = await readValue(OWNER_KEY);
+    if (owner && owner !== subject) return false;
+    if (!owner) await writeValue(OWNER_KEY, subject);
+    return true;
+  },
 };

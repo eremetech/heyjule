@@ -15,7 +15,9 @@
     },
     "android": {
       "package": "health.heyjule.patient",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -33,7 +35,8 @@
           "configureAndroidBackup": true,
           "faceIDPermission": "Allow heyjule to protect your private health journal."
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

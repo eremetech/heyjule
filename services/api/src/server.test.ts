@@ -152,6 +152,20 @@ test("MCP summaries are device-sealed, acknowledged only after pickup, and never
   }
 });
 
+test("the authenticated session endpoint binds a mobile journal to its patient account", async () => {
+  const app = await setup();
+  try {
+    const response = await api(app.origin, "/v1/session", { token: "patient-token" });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { subject: patient.sub, role: "patient" });
+
+    const anonymous = await api(app.origin, "/v1/session");
+    assert.equal(anonymous.status, 401);
+  } finally {
+    await app.close();
+  }
+});
+
 test("patient records are encrypted at rest but available to the authenticated patient", async () => {
   const app = await setup();
   try {
