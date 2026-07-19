@@ -620,6 +620,9 @@ label {
 /* ---------- menopause dashboard report ---------- */
 
 .dashboard-report { --panel-gap: 0.9rem; }
+/* The dashboard needs the full desktop width; the app shell's 44rem column
+ * crushes its three-column grids into a single squeezed strip. */
+.page:has(.dashboard-report) { max-width: 78rem; }
 .panel {
   border: 1px solid var(--line);
   border-radius: calc(var(--radius) + 2px);
@@ -665,6 +668,8 @@ label {
   gap: var(--panel-gap);
   margin-top: var(--panel-gap);
 }
+/* No PROM score card (e.g. no PROMs in the record): let the assessment span. */
+.dash-overview-solo { grid-template-columns: 1fr; }
 .assessment-lede { font-weight: 650; line-height: 1.5; }
 .assessment-findings { list-style: none; margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.45rem; }
 .assessment-findings li { display: flex; gap: 0.7rem; align-items: baseline; font-size: 0.875rem; color: var(--ink-2); line-height: 1.5; }
@@ -744,7 +749,28 @@ label {
   grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr) minmax(13rem, 1fr);
   gap: var(--panel-gap);
   margin-top: 1.6rem;
-  align-items: start;
+  align-items: stretch;
+}
+/* Grid adapts to how many panels the record actually produced. */
+.dash-cols-1 { grid-template-columns: 1fr; }
+.dash-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.chart-metrics { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+.chart-metric {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.3rem 0.85rem;
+  cursor: pointer;
+}
+.chart-metric:hover { border-color: var(--accent); color: var(--accent-ink); }
+.metric-active {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 .therapy-current { display: flex; flex-direction: column; gap: 0.2rem; padding-bottom: 0.75rem; }
 .therapy-current span { color: var(--ink-3); font-size: 0.75rem; }

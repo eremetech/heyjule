@@ -12,6 +12,12 @@ import type {
 import { useEffect, useMemo, useState } from "react";
 import { getBrowserDoctorKey } from "@/lib/doctor-key-store";
 import { Sparkline } from "./sparkline";
+import {
+  TimeSeriesChart,
+  type ChartEvent,
+  type ChartMarker,
+} from "./time-series-chart";
+import type { CheckInEntry } from "@heyjule/shared-types";
 
 type DecryptionState =
   | { status: "decrypting" }
@@ -137,13 +143,24 @@ function DomainCard({ domain }: { domain: DomainSummary }) {
   );
 }
 
-/* ---------- MRS total ---------- */
+/* ---------- PROM total (dominant instrument: MRS, MIDAS, ISI, …) ---------- */
 
-function MrsScoreCard({ entries }: { entries: PromEntry[] }) {
-  const mrs = entries.filter((entry) => /mrs/i.test(entry.payload.instrument));
-  if (mrs.length === 0) return null;
+function dominantInstrument(entries: PromEntry[]) {
+  const byInstrument = new Map<string, PromEntry[]>();
+  for (const entry of entries) {
+    const list = byInstrument.get(entry.payload.instrument) ?? [];
+    list.push(entry);
+    byInstrument.set(entry.payload.instrument, list);
+  }
+  return [...byInstrument.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? null;
+}
+
+function PromScoreCard({ entries }: { entries: PromEntry[] }) {
+  const dominant = dominantInstrument(entries);
+  if (!dominant) return null;
+  const [instrument, list] = dominant;
   const byItem = new Map<string, PromEntry[]>();
-  for (const entry of mrs) {
+  for (const entry of list) {
     const list = byItem.get(entry.payload.item) ?? [];
     list.push(entry);
     byItem.set(entry.payload.item, list);
@@ -164,7 +181,7 @@ function MrsScoreCard({ entries }: { entries: PromEntry[] }) {
 
   return (
     <div className="mrs-card">
-      <span className="mrs-title">MRS total score <small>(0–{max})</small></span>
+      <span className="mrs-title">{instrument} total score <small>(0–{max})</small></span>
       <div className="mrs-numbers">
         <span className="mrs-current">
           {current} <small>/ {max}</small>
@@ -237,6 +254,13 @@ function formatSleep(minutes: number) {
   return `${h} h ${m.toString().padStart(2, "0")} min`;
 }
 
+function deltaText(diff: number, unit: string, baseline: string) {
+  const rounded = Math.round(diff);
+  if (rounded === 0) return `steady vs. baseline (${baseline})`;
+  const amount = unit ? `${Math.abs(rounded)} ${unit}` : `${Math.abs(rounded)}`;
+  return `${rounded > 0 ? "+" : "−"}${amount} vs. baseline (${baseline})`;
+}
+
 function Wearables({ entries, windowDays }: { entries: WearableEntry[]; windowDays: number }) {
   if (entries.length < 5) return null;
   const sorted = [...entries].sort((a, b) => a.payload.date.localeCompare(b.payload.date));
@@ -260,8 +284,8 @@ function Wearables({ entries, windowDays }: { entries: WearableEntry[]; windowDa
       label: "Sleep duration",
       sub: "avg per night",
       value: formatSleep(sleepRecent),
-      delta: `${sleepRecent - sleepBase >= 0 ? "+" : "−"}${Math.abs(Math.round(sleepRecent - sleepBase))} min vs. baseline (${formatSleep(sleepBase)})`,
-      good: sleepRecent >= sleepBase,
+      delta: deltaText(sleepRecent - sleepBase, "min", formatSleep(sleepBase)),
+      good: Math.round(sleepRecent - sleepBase) >= 0,
       series: sorted.map((e) => e.payload.sleepMinutes / 60),
       format: (v: number) => `${v.toFixed(1)} h`,
     },
@@ -269,8 +293,8 @@ function Wearables({ entries, windowDays }: { entries: WearableEntry[]; windowDa
       label: "Active days",
       sub: "per week (≥7k steps)",
       value: `${Math.round(activeDays)} days`,
-      delta: `${activeDays - activeBase >= 0 ? "+" : "−"}${Math.abs(Math.round(activeDays - activeBase))} vs. baseline (${Math.round(activeBase)})`,
-      good: activeDays >= activeBase,
+      delta: deltaText(activeDays - activeBase, "", `${Math.round(activeBase)}`),
+      good: Math.round(activeDays - activeBase) >= 0,
       series: sorted.map((e) => e.payload.steps),
       format: (v: number) => `${Math.round(v).toLocaleString()} steps`,
     },
@@ -278,8 +302,8 @@ function Wearables({ entries, windowDays }: { entries: WearableEntry[]; windowDa
       label: "Resting pulse",
       sub: "avg per day",
       value: `${Math.round(hrRecent)} bpm`,
-      delta: `${hrRecent - hrBase >= 0 ? "+" : "−"}${Math.abs(Math.round(hrRecent - hrBase))} bpm vs. baseline (${Math.round(hrBase)})`,
-      good: hrRecent <= hrBase,
+      delta: deltaText(hrRecent - hrBase, "bpm", `${Math.round(hrBase)} bpm`),
+      good: Math.round(hrRecent - hrBase) <= 0,
       series: sorted.map((e) => e.payload.restingHeartRate),
       format: (v: number) => `${Math.round(v)} bpm`,
     },
@@ -287,8 +311,8 @@ function Wearables({ entries, windowDays }: { entries: WearableEntry[]; windowDa
       label: "HRV",
       sub: "avg per night",
       value: `${Math.round(hrvRecent)} ms`,
-      delta: `${hrvRecent - hrvBase >= 0 ? "+" : "−"}${Math.abs(Math.round(hrvRecent - hrvBase))} ms vs. baseline (${Math.round(hrvBase)})`,
-      good: hrvRecent >= hrvBase,
+      delta: deltaText(hrvRecent - hrvBase, "ms", `${Math.round(hrvBase)} ms`),
+      good: Math.round(hrvRecent - hrvBase) >= 0,
       series: sorted.map((e) => e.payload.hrvMs),
       format: (v: number) => `${Math.round(v)} ms`,
     },
@@ -322,6 +346,89 @@ function Wearables({ entries, windowDays }: { entries: WearableEntry[]; windowDa
         ))}
       </div>
     </div>
+  );
+}
+
+/* ---------- interactive trends ---------- */
+
+const TREND_METRICS = [
+  { key: "sleep", label: "Sleep", unit: "h", decimals: 1, scale: 1 / 60, yMin: undefined, value: (e: WearableEntry) => e.payload.sleepMinutes },
+  { key: "hr", label: "Resting pulse", unit: "bpm", decimals: 0, scale: 1, yMin: undefined, value: (e: WearableEntry) => e.payload.restingHeartRate },
+  { key: "hrv", label: "HRV", unit: "ms", decimals: 0, scale: 1, yMin: undefined, value: (e: WearableEntry) => e.payload.hrvMs },
+  { key: "steps", label: "Steps", unit: "steps", decimals: 0, scale: 1, yMin: 0, value: (e: WearableEntry) => e.payload.steps },
+] as const;
+
+function severityBucket(severity: number): ChartEvent["severity"] {
+  if (severity >= 7) return "severe";
+  if (severity >= 4) return "moderate";
+  return "mild";
+}
+
+function InteractiveTrends({
+  wearables,
+  checkIns,
+  treatments,
+}: {
+  wearables: WearableEntry[];
+  checkIns: CheckInEntry[];
+  treatments: TreatmentEntry[];
+}) {
+  const [metricKey, setMetricKey] = useState<(typeof TREND_METRICS)[number]["key"]>("sleep");
+  if (wearables.length < 2) return null;
+
+  const sorted = [...wearables].sort((a, b) => a.payload.date.localeCompare(b.payload.date));
+  const from = sorted[0].payload.date;
+  const to = sorted[sorted.length - 1].payload.date;
+  const inRange = (date: string) => date >= from && date <= to;
+  const metric = TREND_METRICS.find((m) => m.key === metricKey) ?? TREND_METRICS[0];
+
+  const events: ChartEvent[] = checkIns
+    .filter((entry) => entry.payload.symptoms.length > 0 && inRange(entry.occurredAt.slice(0, 10)))
+    .map((entry) => ({
+      date: entry.occurredAt.slice(0, 10),
+      title: entry.payload.title ?? entry.payload.symptoms.join(", "),
+      severity: severityBucket(entry.payload.severity),
+      note: entry.payload.note,
+    }));
+  const markers: ChartMarker[] = treatments
+    .filter((entry) => inRange(entry.payload.startedAt))
+    .map((entry) => ({ date: entry.payload.startedAt, label: `${entry.payload.name} started` }));
+
+  return (
+    <section className="report-block">
+      <h2>
+        Trends <span className="block-tag">interactive · hover for daily values</span>
+      </h2>
+      <div className="chart-metrics" role="tablist" aria-label="Trend metric">
+        {TREND_METRICS.map((m) => (
+          <button
+            key={m.key}
+            role="tab"
+            aria-selected={m.key === metric.key}
+            className={m.key === metric.key ? "chart-metric metric-active" : "chart-metric"}
+            onClick={() => setMetricKey(m.key)}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <TimeSeriesChart
+        points={sorted.map((entry) => ({ date: entry.payload.date, value: metric.value(entry) }))}
+        events={events}
+        markers={markers}
+        unit={metric.unit}
+        decimals={metric.decimals}
+        scale={metric.scale}
+        yMin={metric.yMin}
+        label={`${metric.label} over the report window`}
+      />
+      {(events.length > 0 || markers.length > 0) && (
+        <p className="chart-legend">
+          {events.length > 0 && "Dots under the plot are patient-logged symptoms (hover for the entry). "}
+          {markers.length > 0 && "Dashed lines mark treatment starts."}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -398,6 +505,7 @@ export function EncryptedReportViewer({ value }: { value: EncryptedDoctorExport 
   const entries: PatientEntry[] = report.entries ?? [];
   const treatmentEntries = entries.filter((entry): entry is TreatmentEntry => entry.kind === "treatment");
   const wearableEntries = entries.filter((entry): entry is WearableEntry => entry.kind === "wearable");
+  const checkInEntries = entries.filter((entry): entry is CheckInEntry => entry.kind === "check_in");
   const generatedOn = new Date(report.generatedAt);
   const initials = report.patient.name
     .split(/\s+/u)
@@ -407,6 +515,11 @@ export function EncryptedReportViewer({ value }: { value: EncryptedDoctorExport 
     .toUpperCase();
   const therapyNote = report.sections.find((section) => section.key === "treatments")?.summary;
   const collectedDomains = domains.some((domain) => domain.collected);
+  const hasScoreCard = promEntries.length > 0;
+  const bottomPanels =
+    (treatmentEntries.length > 0 || therapyNote ? 1 : 0) +
+    (wearableEntries.length >= 5 ? 1 : 0) +
+    (report.discussionPoints && report.discussionPoints.length > 0 ? 1 : 0);
 
   function download() {
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
@@ -457,7 +570,7 @@ export function EncryptedReportViewer({ value }: { value: EncryptedDoctorExport 
         </div>
       </header>
 
-      <div className="dash-overview">
+      <div className={hasScoreCard ? "dash-overview" : "dash-overview dash-overview-solo"}>
         <div className="panel assessment-panel">
           <h3>Clinical assessment</h3>
           <p className="assessment-lede">{report.headline}</p>
@@ -484,7 +597,7 @@ export function EncryptedReportViewer({ value }: { value: EncryptedDoctorExport 
             ))}
           </details>
         </div>
-        <MrsScoreCard entries={promEntries} />
+        {hasScoreCard ? <PromScoreCard entries={promEntries} /> : null}
       </div>
 
       {collectedDomains ? (
@@ -498,7 +611,13 @@ export function EncryptedReportViewer({ value }: { value: EncryptedDoctorExport 
         </section>
       ) : null}
 
-      <div className="dash-bottom">
+      <InteractiveTrends
+        wearables={wearableEntries}
+        checkIns={checkInEntries}
+        treatments={treatmentEntries}
+      />
+
+      <div className={`dash-bottom dash-cols-${Math.max(bottomPanels, 1)}`}>
         <Therapy entries={treatmentEntries} note={therapyNote} />
         <Wearables entries={wearableEntries} windowDays={report.period.timeframeDays} />
         {report.discussionPoints && report.discussionPoints.length > 0 ? (
