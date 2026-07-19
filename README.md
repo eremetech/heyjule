@@ -1,28 +1,29 @@
-# HeyJule — demo website
+# HeyJule, demo website
 
-Static, single-page deliverable for the HeyJule project (HackNation Challenge 5,
-part 03 "Application Infrastructure"). One non-scrolling page: problem → solution,
-an animated patient → HeyJule → clinician illustration, and two "Start demo"
-entry points that link to the patient and clinician deployments.
+Single static landing page for the HeyJule deliverable (HackNation Challenge 5,
+part 03 "Application Infrastructure"). One non-scrolling page: a short problem
+and solution, a chart of Monika's year on menopausal hormone therapy as the
+signature artifact, and two entry points, one for the patient demo and one for
+the clinician demo.
 
 ## Files
-- `index.html` — the page
-- `style.css` — all styling (desktop-locked, no-scroll; scrolls only on very small screens)
-- `assets/img/product-illustration.svg` — the animated hero illustration
-- `assets/videos/` — reserved for later
-- `v0/` — earlier fallback version
+- `index.html` — the live page (self-contained: inline CSS, inline SVG chart,
+  Gambarino via Fontshare CDN, no local assets)
+- `previous/` — the earlier illustration-based design, kept as a fallback
+- `v0/` — the first no-scroll prototype
 
 ## Wiring up the demos
-Swap the two `href="#"` on the `.start-btn` links in `index.html` for the real
-patient / clinician deployment URLs.
+Swap the two `href="#"` on the `.way` links in `index.html` for the real
+patient and clinician deployment URLs.
 
 ## Local preview
-Any static server works, e.g.:
+Any static server works, for example:
 ```
 python3 -m http.server 4173
 ```
 then open http://localhost:4173
 
 ## Live URL
-Deployed via GitHub Pages from this folder — see `.github/workflows/deploy-pages.yml`
-at the repo root. Published at https://eremetech.github.io/heyjule/
+Deployed via GitHub Pages from this folder, see
+`.github/workflows/deploy-pages.yml` at the repo root.
+Published at https://eremetech.github.io/heyjule/
