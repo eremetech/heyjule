@@ -22,6 +22,10 @@
     "patchedDependencies": {
       "react-native-audio-api@0.10.3": "patches/react-native-audio-api@0.10.3.patch",
       "expo-constants@18.0.13": "patches/expo-constants@18.0.13.patch"
+    },
+    "overrides": {
+      "react": "19.1.0",
+      "react-dom": "19.1.0"
     }
   }
 }
