@@ -3,55 +3,282 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HeyJule — One shared health story</title>
+<title>HeyJule, one shared health story</title>
 <meta name="description" content="HeyJule turns fragmented hormonal-health data into one shared, longitudinal story for patients and clinicians.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%232f6fed%22/></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%23E95031%22/></svg>">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=gambarino@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FBF1E9;
+    --panel: #FFFCF9;
+    --ink: #33201A;
+    --muted: #8C6F63;
+    --faint: #B49A8D;
+    --coral: #E95031;
+    --coral-ink: #B93A1F;
+    --sleep: #B08A73;
+    --serif: 'Gambarino', Georgia, 'Times New Roman', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--paper);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    height: 100vh;
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: clamp(20px, 3vh, 34px) clamp(24px, 3.5vw, 56px);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(10px, 1.7vh, 20px);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    text-decoration: none;
+    color: var(--ink);
+    align-self: flex-start;
+  }
+  .brand svg { display: block; }
+  .brand-word {
+    font-family: var(--serif);
+    font-size: 28px;
+    letter-spacing: 0.01em;
+  }
+
+  .hero { max-width: 900px; }
+  h1 {
+    margin: 0 0 clamp(7px, 1.4vh, 14px);
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(30px, 5vh, 48px);
+    line-height: 1.1;
+  }
+  h1 .accent { color: var(--coral-ink); }
+
+  .lines { display: flex; flex-direction: column; gap: 5px; }
+  .lines p {
+    margin: 0;
+    font-size: clamp(13.5px, 1.65vh, 15.5px);
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 76ch;
+  }
+  .lines b { color: var(--ink); font-weight: 650; }
+
+  /* The chart artifact */
+  .chart-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    background: var(--panel);
+    border: 1px solid rgba(51, 32, 26, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border-radius: 18px;
+    padding: clamp(12px, 2vh, 20px) clamp(14px, 1.8vw, 24px);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .chart-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .chart-head .who { font-size: 13px; font-weight: 650; color: var(--ink); }
+  .chart-head .what { font-size: 12px; color: var(--muted); }
+  .chart-panel svg { flex: 1 1 auto; min-height: 0; width: 100%; }
+
+  /* The two ways in */
+  .ways {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(18px, 3vw, 40px);
+  }
+  .way {
+    display: grid;
+    grid-template-rows: auto auto auto;
+    row-gap: 5px;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .way h2 {
+    margin: 0;
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(18px, 2.5vh, 23px);
+  }
+  .way p {
+    margin: 0;
+    font-size: clamp(12.5px, 1.55vh, 14px);
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .way .go {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 2px;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--coral-ink);
+    width: fit-content;
+  }
+  .go .squig { display: block; margin-top: 1px; }
+  .go-arrow { transition: transform 0.18s ease; }
+  .way:hover .go-arrow { transform: translate(2px, -2px); }
+  .way:hover .go { color: var(--ink); }
+  .go-stack { display: inline-flex; flex-direction: column; }
+
+  .foot {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .foot p { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+  .foot .scale { color: #6B5348; }
+
+  /* the reading comet traveling the year */
+  @keyframes travel { to { stroke-dashoffset: -100; } }
+  .comet { animation: travel 7s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .comet { animation: none; opacity: 0; } }
+
+  @media (max-width: 880px), (max-height: 620px) {
+    body { overflow: auto; }
+    .page { height: auto; min-height: 100vh; }
+    .ways { grid-template-columns: 1fr; }
+    .chart-panel svg { min-height: 200px; }
+  }
+</style>
 </head>
 <body>
 
 <div class="page">
 
-  <!-- Top-left brand -->
-  <header class="brand-row">
-    <a class="logo" href="#">
-      <svg class="logo-mark" width="52" height="52" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="17" cy="17" r="17" fill="url(#g)"/>
-        <path d="M9 18.5c1.6 0 1.6-3 3.2-3s1.6 3 3.2 3 1.6-3 3.2-3 1.6 3 3.2 3 1.6-3 3.2-3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <defs>
-          <linearGradient id="g" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#14b8a6"/>
-            <stop offset="1" stop-color="#2f6fed"/>
-          </linearGradient>
-        </defs>
-      </svg>
-      <span class="logo-word">HeyJule</span>
-    </a>
-  </header>
+  <a class="brand" href="#">
+    <svg width="34" height="22" viewBox="0 0 34 22" fill="none" aria-hidden="true">
+      <path d="M2 11 c 4 0 4 -8 8 -8 s 4 16 8 16 4 -16 8 -16 4 8 6 8" stroke="#E95031" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="brand-word">HeyJule</span>
+  </a>
 
-  <!-- Problem + solution, one line each -->
-  <section class="statement">
-    <p class="line problem"><span class="tag tag-problem">The problem</span>Symptoms, wearables, labs and doctor's letters live in separate places — patients rebuild years of history from memory, and clinicians only ever see a snapshot.</p>
-    <p class="line solution"><span class="tag tag-solution">Our solution</span>HeyJule connects every source into one longitudinal timeline and uses AI agents to turn it into a clear, evidence-linked story — shared instantly between patient and clinician.</p>
-  </section>
-
-  <!-- Product illustration with a demo entry under patient and clinician -->
-  <section class="showcase">
-    <div class="illus">
-      <img src="assets/img/product-illustration.svg" alt="Patient data flows through HeyJule's AI agents into a clear dashboard for the clinician" />
-      <a class="start-btn start-patient" href="#">Start demo →</a>
-      <a class="start-btn start-clinician" href="#">Start demo →</a>
+  <div class="hero">
+    <h1>A year of menopause, <span class="accent">readable on one page.</span></h1>
+    <div class="lines">
+      <p><b>The problem.</b> Symptoms, wearables, labs and letters live apart, so patients retell years from memory and clinicians see a snapshot.</p>
+      <p><b>Our solution.</b> HeyJule joins every source into one timeline both sides can act on.</p>
     </div>
-  </section>
+  </div>
 
-  <!-- Footer strip -->
+  <div class="chart-panel" role="img" aria-label="Chart of Monika's symptom burden falling over twelve months after menopausal hormone therapy begins, while sleep improves">
+    <div class="chart-head">
+      <span class="who">Monika, 53 · twelve months</span>
+      <span class="what">Symptom burden (MRS) in coral · sleep in taupe</span>
+    </div>
+    <svg viewBox="0 0 1000 230" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <!-- month ticks -->
+      <g fill="#B49A8D" font-family="-apple-system, system-ui, sans-serif" font-size="11" text-anchor="middle">
+        <text x="60"  y="222">J</text><text x="136" y="222">F</text><text x="212" y="222">M</text>
+        <text x="288" y="222">A</text><text x="364" y="222">M</text><text x="440" y="222">J</text>
+        <text x="516" y="222">J</text><text x="592" y="222">A</text><text x="668" y="222">S</text>
+        <text x="744" y="222">O</text><text x="820" y="222">N</text><text x="896" y="222">D</text>
+      </g>
+      <g stroke="#E5CDBF" stroke-width="1.5" stroke-linecap="round">
+        <line x1="60" y1="206" x2="60" y2="200"/><line x1="136" y1="206" x2="136" y2="200"/>
+        <line x1="212" y1="206" x2="212" y2="200"/><line x1="288" y1="206" x2="288" y2="200"/>
+        <line x1="364" y1="206" x2="364" y2="200"/><line x1="440" y1="206" x2="440" y2="200"/>
+        <line x1="516" y1="206" x2="516" y2="200"/><line x1="592" y1="206" x2="592" y2="200"/>
+        <line x1="668" y1="206" x2="668" y2="200"/><line x1="744" y1="206" x2="744" y2="200"/>
+        <line x1="820" y1="206" x2="820" y2="200"/><line x1="896" y1="206" x2="896" y2="200"/>
+      </g>
+
+      <!-- MHT marker, March -->
+      <line x1="212" y1="34" x2="212" y2="206" stroke="#DBA492" stroke-width="1.5" stroke-dasharray="1 7" stroke-linecap="round"/>
+      <text x="220" y="42" font-family="-apple-system, system-ui, sans-serif" font-size="11.5" fill="#8C6F63">MHT starts</text>
+
+      <!-- sleep line, rising softly -->
+      <path d="M60 168 C 110 170 140 172 212 166 C 300 158 360 148 440 142 C 540 135 640 128 744 124 C 800 122 850 120 896 118"
+            fill="none" stroke="#B08A73" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+      <text x="908" y="121" font-family="-apple-system, system-ui, sans-serif" font-size="11" fill="#B08A73">7.4 h</text>
+
+      <!-- MRS line: high burden falling after MHT -->
+      <path id="mrs" pathLength="100"
+            d="M60 62 C 100 54 120 70 160 64 C 190 60 200 52 212 56 C 260 70 300 96 364 112 C 430 128 480 138 550 148 C 620 158 700 164 770 168 C 820 171 860 172 896 174"
+            fill="none" stroke="#E95031" stroke-width="3" stroke-linecap="round"/>
+      <!-- reading comet traveling the year -->
+      <path class="comet" pathLength="100"
+            d="M60 62 C 100 54 120 70 160 64 C 190 60 200 52 212 56 C 260 70 300 96 364 112 C 430 128 480 138 550 148 C 620 158 700 164 770 168 C 820 171 860 172 896 174"
+            fill="none" stroke="#FFD9CB" stroke-width="3" stroke-linecap="round"
+            stroke-dasharray="10 90"/>
+
+      <!-- endpoints, annotated -->
+      <circle cx="60" cy="62" r="4.5" fill="#E95031"/>
+      <text x="60" y="46" font-family="-apple-system, system-ui, sans-serif" font-size="11.5" font-weight="600" fill="#B93A1F" text-anchor="middle">MRS 27</text>
+      <circle cx="896" cy="174" r="4.5" fill="#E95031"/>
+      <text x="896" y="196" font-family="-apple-system, system-ui, sans-serif" font-size="11.5" font-weight="600" fill="#B93A1F" text-anchor="middle">MRS 11</text>
+    </svg>
+  </div>
+
+  <div class="ways">
+    <a class="way" href="#" aria-label="Open the patient demo">
+      <h2>See it as the patient</h2>
+      <p>Monika logs by voice in under a minute; wearables and cycles gather themselves.</p>
+      <span class="go">
+        <span class="go-stack">Open demo
+          <svg class="squig" width="76" height="7" viewBox="0 0 76 7" fill="none" aria-hidden="true">
+            <path d="M2 4 c 5 0 5 -2.5 10 -2.5 s 5 3.5 10 3.5 5 -3.5 10 -3.5 5 3.5 10 3.5 5 -3.5 10 -3.5 5 3.5 10 3.5 5 -2.5 12 -2.5" stroke="#E95031" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <svg class="go-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M3 11 L11 3 M5 3 h6 v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </a>
+
+    <a class="way" href="#" aria-label="Open the clinician demo">
+      <h2>Read it as the clinician</h2>
+      <p>The same year lands as a two minute read, every finding linked to its source.</p>
+      <span class="go">
+        <span class="go-stack">Open demo
+          <svg class="squig" width="76" height="7" viewBox="0 0 76 7" fill="none" aria-hidden="true">
+            <path d="M2 4 c 5 0 5 -2.5 10 -2.5 s 5 3.5 10 3.5 5 -3.5 10 -3.5 5 3.5 10 3.5 5 -3.5 10 -3.5 5 3.5 10 3.5 5 -2.5 12 -2.5" stroke="#E95031" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <svg class="go-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M3 11 L11 3 M5 3 h6 v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </a>
+  </div>
+
   <footer class="foot">
-    <div class="foot-tags"><span>Patient-friendly</span> · <span>Clinician-ready</span> · <span>Research-enabling</span></div>
-    <p class="disclaimer">Research and decision-support prototype. Not intended to diagnose disease or replace medical judgment.</p>
-    <p class="side-remark">Starts with menopause — built to scale to other conditions, for women and men.</p>
+    <p class="scale">Starts with menopause. Built to scale to more conditions, for women and men.</p>
+    <p>Research and decision-support prototype, not a diagnostic tool.</p>
   </footer>
 
 </div>
