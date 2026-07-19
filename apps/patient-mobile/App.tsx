@@ -4,7 +4,7 @@ import { Newsreader_500Medium } from "@expo-google-fonts/newsreader/500Medium";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
-import { ActivityIndicator, Animated, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { SoftPressable } from "./src/components/SoftPressable";
@@ -77,6 +77,7 @@ function AppShell() {
 
 function PatientAppGate() {
   const auth = useAuth();
+  const [email, setEmail] = useState("");
   if (!auth.configured) return <AppShell />;
   if (auth.loading) {
     return (
@@ -87,16 +88,45 @@ function PatientAppGate() {
     );
   }
   if (auth.signedIn) return <AppShell />;
+  if (auth.awaitingLink) {
+    return (
+      <View style={styles.authRoot}>
+        <Text style={styles.authEyebrow}>CHECK YOUR EMAIL</Text>
+        <Text style={styles.authTitle}>Your sign-in link{"\n"}is on its way.</Text>
+        <Text style={styles.authDetail}>
+          We sent a link to {email.trim().toLowerCase()}. Open it on this phone and you&apos;ll land right
+          back here, signed in.
+        </Text>
+        {auth.error ? <Text style={styles.authError}>{auth.error}</Text> : null}
+        <SoftPressable onPress={() => void auth.signIn(email)} style={styles.authButton}>
+          <Text style={styles.authButtonText}>Send it again</Text>
+          <Ionicons name="refresh" size={17} color={colors.white} />
+        </SoftPressable>
+      </View>
+    );
+  }
   return (
     <View style={styles.authRoot}>
       <Text style={styles.authEyebrow}>PRIVATE BY DESIGN</Text>
       <Text style={styles.authTitle}>Your health story,{"\n"}kept close.</Text>
       <Text style={styles.authDetail}>
-        Sign in securely to receive your chat summaries and keep your check-ins in sync.
+        Enter your email and we&apos;ll send you a secure one-tap sign-in link. No password needed.
       </Text>
+      <TextInput
+        style={styles.authInput}
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        placeholderTextColor={colors.inkFaint}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        onSubmitEditing={() => void auth.signIn(email)}
+      />
       {auth.error ? <Text style={styles.authError}>{auth.error}</Text> : null}
-      <SoftPressable onPress={() => void auth.signIn()} style={styles.authButton}>
-        <Text style={styles.authButtonText}>Sign in securely</Text>
+      <SoftPressable onPress={() => void auth.signIn(email)} style={styles.authButton}>
+        <Text style={styles.authButtonText}>Email me a sign-in link</Text>
         <Ionicons name="arrow-forward" size={17} color={colors.white} />
       </SoftPressable>
     </View>
@@ -160,6 +190,17 @@ const styles = StyleSheet.create({
     color: colors.inkFaint,
     fontSize: 15,
     lineHeight: 23,
+  },
+  authInput: {
+    minHeight: 54,
+    marginTop: 26,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(28, 25, 23, 0.14)",
+    backgroundColor: colors.white,
+    color: colors.ink,
+    fontSize: 16,
   },
   authError: {
     marginTop: 14,

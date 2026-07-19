@@ -1,5 +1,3 @@
-import * as AuthSession from "expo-auth-session";
-import * as WebBrowser from "expo-web-browser";
 import {
   createContext,
   type PropsWithChildren,
@@ -10,59 +8,90 @@ import {
   useRef,
   useState,
 } from "react";
+import { Linking } from "react-native";
 
-import { appConfig, patientScopes } from "../lib/app-config";
-import { readStoredToken, writeStoredToken } from "./token-store";
-
-WebBrowser.maybeCompleteAuthSession();
+import { appConfig } from "../lib/app-config";
+import { readStoredSession, writeStoredSession } from "./token-store";
 
 type AuthValue = {
   configured: boolean;
   loading: boolean;
   signedIn: boolean;
+  /** A sign-in email has been sent and we're waiting for the link to be tapped. */
+  awaitingLink: boolean;
   error: string | null;
-  signIn: () => Promise<void>;
+  signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   getAccessToken: (forceRefresh?: boolean) => Promise<string | null>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
-const redirectUri = AuthSession.makeRedirectUri({ scheme: "heyjule", path: "oauth/callback" });
+
+// Better Auth JWTs live for 10 minutes; refresh with margin.
+const JWT_TTL_MS = 8 * 60 * 1000;
+
+function extractMagicToken(url: string): string | null {
+  if (!url.startsWith("heyjule://")) return null;
+  const match = url.match(/[?&]token=([^&#]+)/u);
+  if (!match?.[1] || !/auth\/verify/u.test(url)) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const discovery = AuthSession.useAutoDiscovery(appConfig.oauthIssuer);
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: appConfig.oauthClientId ?? "unconfigured",
-      redirectUri,
-      scopes: patientScopes,
-      responseType: AuthSession.ResponseType.Code,
-      usePKCE: true,
-      extraParams: appConfig.apiUrl ? { resource: appConfig.apiUrl } : undefined,
-    },
-    discovery,
-  );
-  const tokenRef = useRef<AuthSession.TokenResponse | null>(null);
+  const sessionRef = useRef<string | null>(null);
+  const jwtRef = useRef<{ token: string; fetchedAt: number } | null>(null);
   const refreshRef = useRef<Promise<string | null> | null>(null);
-  const [loading, setLoading] = useState(appConfig.oauthConfigured);
+  const consumedMagicTokens = useRef<Set<string>>(new Set());
+  const [loading, setLoading] = useState(appConfig.authConfigured);
   const [signedIn, setSignedIn] = useState(Boolean(appConfig.devAccessToken));
+  const [awaitingLink, setAwaitingLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const persistToken = useCallback(async (token: AuthSession.TokenResponse | null) => {
-    tokenRef.current = token;
+  const persistSession = useCallback(async (token: string | null) => {
+    sessionRef.current = token;
+    jwtRef.current = null;
     setSignedIn(Boolean(token) || Boolean(appConfig.devAccessToken));
-    await writeStoredToken(token?.getRequestConfig() ?? null);
+    await writeStoredSession(token);
   }, []);
 
+  const completeMagicSignIn = useCallback(
+    async (magicToken: string) => {
+      if (!appConfig.authUrl || consumedMagicTokens.current.has(magicToken)) return;
+      consumedMagicTokens.current.add(magicToken);
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(
+          `${appConfig.authUrl}/api/auth/magic-link/verify?token=${encodeURIComponent(magicToken)}`,
+          { headers: { Accept: "application/json" } },
+        );
+        if (!response.ok) throw new Error(`verify failed (${response.status})`);
+        const body = (await response.json()) as { token?: string };
+        if (!body.token) throw new Error("verify response had no session token");
+        await persistSession(body.token);
+        setAwaitingLink(false);
+      } catch {
+        setError("That sign-in link is no longer valid. Please request a new one.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [persistSession],
+  );
+
   useEffect(() => {
-    if (!appConfig.oauthConfigured || appConfig.devAccessToken) {
+    if (!appConfig.authConfigured || appConfig.devAccessToken) {
       setLoading(false);
       return;
     }
-    readStoredToken()
+    readStoredSession()
       .then((stored) => {
         if (stored) {
-          tokenRef.current = new AuthSession.TokenResponse(stored);
+          sessionRef.current = stored;
           setSignedIn(true);
         }
       })
@@ -70,104 +99,102 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (response?.type === "error") {
-      setError("Sign-in was not completed. Please try again.");
-      return;
-    }
-    if (response?.type !== "success" || !request?.codeVerifier || !discovery) return;
-    const code = response.params.code;
-    if (!code) {
-      setError("The sign-in response did not include an authorization code.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    AuthSession.exchangeCodeAsync(
-      {
-        clientId: appConfig.oauthClientId ?? "",
-        code,
-        redirectUri,
-        extraParams: {
-          code_verifier: request.codeVerifier,
-          ...(appConfig.apiUrl ? { resource: appConfig.apiUrl } : {}),
-        },
-      },
-      discovery,
-    )
-      .then(persistToken)
-      .catch(() => setError("HeyJule could not finish signing in. Please try again."))
-      .finally(() => setLoading(false));
-  }, [discovery, persistToken, request, response]);
+    const handleUrl = (url: string | null) => {
+      const token = url ? extractMagicToken(url) : null;
+      if (token) void completeMagicSignIn(token);
+    };
+    const subscription = Linking.addEventListener("url", ({ url }) => handleUrl(url));
+    Linking.getInitialURL().then(handleUrl).catch(() => undefined);
+    return () => subscription.remove();
+  }, [completeMagicSignIn]);
 
-  const signIn = useCallback(async () => {
+  const signIn = useCallback(async (email: string) => {
     if (appConfig.devAccessToken) {
       setSignedIn(true);
       return;
     }
-    if (!appConfig.oauthConfigured || !request || !discovery) {
+    if (!appConfig.authConfigured || !appConfig.authUrl) {
       setError("Secure sign-in is not configured yet.");
       return;
     }
+    const address = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(address)) {
+      setError("Enter a valid email address.");
+      return;
+    }
     setError(null);
-    await promptAsync();
-  }, [discovery, promptAsync, request]);
+    setLoading(true);
+    try {
+      const response = await fetch(`${appConfig.authUrl}/api/auth/sign-in/magic-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: address }),
+      });
+      if (!response.ok) throw new Error(`magic link request failed (${response.status})`);
+      setAwaitingLink(true);
+    } catch {
+      setError("HeyJule could not send the sign-in email. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const getAccessToken = useCallback(async (forceRefresh = false) => {
-    if (appConfig.devAccessToken) return appConfig.devAccessToken;
-    const current = tokenRef.current;
-    if (!current) return null;
-    if (!forceRefresh && AuthSession.TokenResponse.isTokenFresh(current, 60)) return current.accessToken;
-    if (!current.refreshToken || !discovery || !appConfig.oauthClientId) {
-      await persistToken(null);
-      return null;
-    }
-    if (!refreshRef.current) {
-      refreshRef.current = AuthSession.refreshAsync(
-        {
-          clientId: appConfig.oauthClientId,
-          refreshToken: current.refreshToken,
-          scopes: patientScopes,
-          extraParams: appConfig.apiUrl ? { resource: appConfig.apiUrl } : undefined,
-        },
-        discovery,
-      )
-        .then(async (token) => {
-          await persistToken(token);
-          return token.accessToken;
+  const getAccessToken = useCallback(
+    async (forceRefresh = false) => {
+      if (appConfig.devAccessToken) return appConfig.devAccessToken;
+      const session = sessionRef.current;
+      if (!session || !appConfig.authUrl) return null;
+      const cached = jwtRef.current;
+      if (!forceRefresh && cached && Date.now() - cached.fetchedAt < JWT_TTL_MS) return cached.token;
+      if (!refreshRef.current) {
+        refreshRef.current = fetch(`${appConfig.authUrl}/api/auth/token`, {
+          headers: { Authorization: `Bearer ${session}` },
         })
-        .catch(async () => {
-          await persistToken(null);
-          return null;
-        })
-        .finally(() => {
-          refreshRef.current = null;
-        });
-    }
-    return refreshRef.current;
-  }, [discovery, persistToken]);
+          .then(async (response) => {
+            if (response.status === 401 || response.status === 403) {
+              await persistSession(null);
+              return null;
+            }
+            if (!response.ok) return null;
+            const body = (await response.json()) as { token?: string };
+            if (!body.token) return null;
+            jwtRef.current = { token: body.token, fetchedAt: Date.now() };
+            return body.token;
+          })
+          .catch(() => null)
+          .finally(() => {
+            refreshRef.current = null;
+          });
+      }
+      return refreshRef.current;
+    },
+    [persistSession],
+  );
 
   const signOut = useCallback(async () => {
-    const current = tokenRef.current;
-    await persistToken(null);
-    if (current && discovery?.revocationEndpoint && appConfig.oauthClientId) {
-      await AuthSession.revokeAsync(
-        { clientId: appConfig.oauthClientId, token: current.refreshToken ?? current.accessToken },
-        discovery,
-      ).catch(() => false);
+    const session = sessionRef.current;
+    await persistSession(null);
+    setAwaitingLink(false);
+    if (session && appConfig.authUrl) {
+      await fetch(`${appConfig.authUrl}/api/auth/sign-out`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session}` },
+      }).catch(() => undefined);
     }
-  }, [discovery, persistToken]);
+  }, [persistSession]);
 
   const value = useMemo<AuthValue>(
     () => ({
-      configured: appConfig.oauthConfigured || Boolean(appConfig.devAccessToken),
+      configured: appConfig.authConfigured || Boolean(appConfig.devAccessToken),
       loading,
       signedIn,
+      awaitingLink,
       error,
       signIn,
       signOut,
       getAccessToken,
     }),
-    [error, getAccessToken, loading, signIn, signOut, signedIn],
+    [awaitingLink, error, getAccessToken, loading, signIn, signOut, signedIn],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

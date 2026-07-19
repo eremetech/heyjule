@@ -25,6 +25,7 @@ function migrate(conn: Database.Database) {
       "email" TEXT NOT NULL UNIQUE,
       "emailVerified" INTEGER NOT NULL,
       "image" TEXT,
+      "role" TEXT NOT NULL DEFAULT 'doctor',
       "createdAt" DATE NOT NULL,
       "updatedAt" DATE NOT NULL
     );
@@ -69,6 +70,11 @@ function migrate(conn: Database.Database) {
       "expiresAt" DATE
     );
   `);
+
+  const userColumns = conn.pragma("table_info('user')") as Array<{ name: string }>;
+  if (!userColumns.some((column) => column.name === "role")) {
+    conn.exec(`ALTER TABLE "user" ADD COLUMN "role" TEXT NOT NULL DEFAULT 'doctor';`);
+  }
 
   if (process.env.HEYJULE_ENABLE_LEGACY_REPORTS === "true") conn.exec(`
     CREATE TABLE IF NOT EXISTS patients (
