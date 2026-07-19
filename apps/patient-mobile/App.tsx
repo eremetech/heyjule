@@ -1,8 +1,7 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -20,10 +19,10 @@ import {
   IBMPlexMono_400Regular,
   IBMPlexMono_500Medium,
 } from '@expo-google-fonts/ibm-plex-mono';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-import { colors, fonts, phaseLabel, phaseTint, type Phase } from './src/theme';
+import { colors, fonts } from './src/theme';
 import {
-  days,
   extract,
   followUpFor,
   contextFor,
@@ -34,19 +33,49 @@ import {
   type ProactiveQuestion,
   type SignalKey,
 } from './src/data/mock';
-import { EntryCard } from './src/components/EntryCard';
-import { ProactiveCard } from './src/components/ProactiveCard';
-import { Margin } from './src/components/Margin';
 import { CaptureBar } from './src/components/CaptureBar';
 import { TextCapture } from './src/components/TextCapture';
 import { VoiceCapture } from './src/components/VoiceCapture';
 import { InflowShelf } from './src/components/InflowShelf';
 import { OutflowSheet } from './src/components/OutflowSheet';
 import { CompressedView } from './src/components/CompressedView';
+import { CyclePhaseGrid } from './src/components/CyclePhaseGrid';
 import { confirm } from './src/lib/haptics';
 
-const PHASES: Phase[] = ['menstrual', 'follicular', 'ovulation', 'luteal'];
-const SIGNALS: SignalKey[] = ['rhr', 'skinTemp', 'sleepHours'];
+function SettingsIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+        stroke={colors.ink}
+        strokeWidth={1.8}
+      />
+      <Path
+        d="M19.4 13.1c.05-.36.05-.74 0-1.1l1.7-1.33a.5.5 0 0 0 .12-.64l-1.6-2.78a.5.5 0 0 0-.6-.22l-2 .8a7.1 7.1 0 0 0-.95-.55l-.3-2.14A.5.5 0 0 0 15.3 4h-3.2a.5.5 0 0 0-.5.43l-.3 2.14c-.34.14-.66.32-.95.55l-2-.8a.5.5 0 0 0-.6.22L4.55 9.32a.5.5 0 0 0 .12.64L6.37 11.3c-.05.36-.05.74 0 1.1l-1.7 1.33a.5.5 0 0 0-.12.64l1.6 2.78c.13.23.39.32.6.22l2-.8c.29.23.61.41.95.55l.3 2.14c.04.24.25.43.5.43h3.2c.25 0 .46-.19.5-.43l.3-2.14c.34-.14.66-.32.95-.55l2 .8c.22.1.47 0 .6-.22l1.6-2.78a.5.5 0 0 0-.12-.64L19.4 13.1Z"
+        stroke={colors.ink}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function QrIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Rect x={3} y={3} width={8} height={8} rx={1.2} stroke={colors.ink} strokeWidth={1.8} />
+      <Rect x={13} y={3} width={8} height={8} rx={1.2} stroke={colors.ink} strokeWidth={1.8} />
+      <Rect x={3} y={13} width={8} height={8} rx={1.2} stroke={colors.ink} strokeWidth={1.8} />
+      <Path
+        d="M13 13h3v3h-3v-3Zm5 0h3v2h-2v3h-3v-2h2v-3Zm-2 5h2v3h-3v-2h1v-1Zm4 1h2v2h-2v-2Z"
+        fill={colors.ink}
+      />
+      <Circle cx={7} cy={7} r={1.5} fill={colors.ink} />
+      <Circle cx={17} cy={7} r={1.5} fill={colors.ink} />
+      <Circle cx={7} cy={17} r={1.5} fill={colors.ink} />
+    </Svg>
+  );
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -58,14 +87,12 @@ export default function App() {
     IBMPlexMono_500Medium,
   });
 
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
 
   // ------- record state -------
   const [entries, setEntries] = useState<Entry[]>(seedEntries);
   const [questions, setQuestions] = useState<ProactiveQuestion[]>(seedQuestions);
-  const [signal, setSignal] = useState<SignalKey>('rhr');
-  const [compressed, setCompressed] = useState(false);
-
+  const [signal] = useState<SignalKey>('rhr');
   // ------- surfaces -------
   const [shelfOpen, setShelfOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -79,49 +106,8 @@ export default function App() {
   const [paused, setPaused] = useState<Set<string>>(new Set());
   const [consent, setConsent] = useState<Set<string>>(new Set());
 
-  // ------- stream scroll → ambient phase + margin cursor -------
-  const scrollRef = useRef<ScrollView>(null);
-  const layout = useRef({ content: 1, viewport: 1 });
-  const [scrollFraction, setScrollFraction] = useState(1);
-  const phaseAnim = useRef(new Animated.Value(PHASES.indexOf(days[days.length - 1].phase))).current;
-  const lastPhase = useRef<Phase>(days[days.length - 1].phase);
-  const mountedAt = useRef(Date.now());
-
-  const bgColor = phaseAnim.interpolate({
-    inputRange: [0, 1, 2, 3],
-    outputRange: PHASES.map((p) => phaseTint[p]),
-  });
-
-  const onScroll = (offsetY: number) => {
-    const { content, viewport } = layout.current;
-    const denom = Math.max(1, content - viewport);
-    const f = Math.min(1, Math.max(0, offsetY / denom));
-    setScrollFraction(f);
-    const day = days[Math.round(f * (days.length - 1))];
-    if (day && day.phase !== lastPhase.current) {
-      lastPhase.current = day.phase;
-      Animated.timing(phaseAnim, {
-        toValue: PHASES.indexOf(day.phase),
-        duration: 450,
-        useNativeDriver: false,
-      }).start();
-    }
-    // overscroll gestures (native bounce): top opens inflow, bottom opens outflow
-    if (offsetY < -60) setShelfOpen(true);
-    if (offsetY > denom + 60) setSheetOpen(true);
-  };
-
-  // ------- stream items grouped by day -------
-  const itemsByDay = useMemo(() => {
-    const map = new Map<string, (Entry | ProactiveQuestion)[]>();
-    [...entries, ...questions].forEach((it) => {
-      const arr = map.get(it.iso) ?? [];
-      arr.push(it);
-      map.set(it.iso, arr);
-    });
-    map.forEach((arr) => arr.sort((a, b) => a.time.localeCompare(b.time)));
-    return map;
-  }, [entries, questions]);
+  // stream / layout
+  const [traceHeight, setTraceHeight] = useState(0);
 
   // ------- capture -------
   const logUtterance = (raw: string, via: 'voice' | 'text') => {
@@ -154,7 +140,7 @@ export default function App() {
     }
     setAnswering(null);
     setTextOpen(false);
-    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+    requestAnimationFrame(() => setTraceHeight((prev) => prev));
   };
 
   const onVoiceRelease = () => {
@@ -171,149 +157,71 @@ export default function App() {
     return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
   }
 
-  const today = days[days.length - 1];
-  const streamHeight = height - 92; // below header
-
   return (
-    <Animated.View style={[styles.root, { backgroundColor: bgColor }]}>
+    <Animated.View style={[styles.root, { backgroundColor: colors.paper }]}>
       <StatusBar style="dark" />
 
-      {/* ---- header: wordmark, today, day/month toggle ---- */}
+      {/* header */}
       <View style={styles.header}>
-        <Pressable onPress={() => setShelfOpen(true)} style={styles.inflowHandle}>
-          <View style={styles.handleBar} />
-        </Pressable>
         <View style={styles.headerRow}>
           <Text style={styles.wordmark}>heyjule</Text>
-          <Text style={styles.headerMeta}>
-            CD {today.cycleDay} · {phaseLabel[today.phase].toLowerCase()}
-          </Text>
-          <View style={styles.toggle}>
-            {(['day', 'month'] as const).map((m) => {
-              const on = (m === 'month') === compressed;
-              return (
-                <Pressable key={m} onPress={() => setCompressed(m === 'month')} hitSlop={6}>
-                  <Text style={[styles.toggleText, on && styles.toggleTextOn]}>
-                    {m.toUpperCase()}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => setShelfOpen(true)}
+              style={styles.iconBtn}
+              accessibilityLabel="Settings"
+            >
+              <SettingsIcon />
+            </Pressable>
+            <Pressable
+              onPress={() => setSheetOpen(true)}
+              style={styles.iconBtn}
+              accessibilityLabel="Share QR"
+            >
+              <QrIcon />
+            </Pressable>
           </View>
         </View>
       </View>
 
-      {/* ---- the Stream / the Month ---- */}
-      <View style={{ flex: 1 }}>
-        {compressed ? (
-          <CompressedView
-            entries={entries}
-            questions={questions}
-            signal={signal}
-            height={streamHeight}
-            width={width}
-          />
-        ) : (
-          <>
-            <ScrollView
-              ref={scrollRef}
-              style={{ flex: 1 }}
-              contentContainerStyle={styles.streamContent}
-              scrollEventThrottle={16}
-              onScroll={(e) => onScroll(e.nativeEvent.contentOffset.y)}
-              onLayout={(e) => (layout.current.viewport = e.nativeEvent.layout.height)}
-              onContentSizeChange={(_, h) => {
-                layout.current.content = h;
-                // keep pinning to today while the initial layout settles
-                if (Date.now() - mountedAt.current < 1500) {
-                  scrollRef.current?.scrollToEnd({ animated: false });
-                }
-              }}
-            >
-              {days.map((d) => {
-                const items = itemsByDay.get(d.iso) ?? [];
-                const isToday = d.iso === todayIso;
-                // Quiet days stay invisible — the vine carries the timeline.
-                if (items.length === 0 && !isToday) return null;
-                return (
-                  <View key={d.iso}>
-                    <View style={styles.dayRule}>
-                      <Text style={[styles.dayDate, isToday && styles.dayDateToday]}>
-                        {isToday ? 'TODAY' : d.iso.slice(5).replace('-', ' · ')}
-                      </Text>
-                      <Text style={styles.dayMeta}>
-                        CD {d.cycleDay} · {d.phase}
-                      </Text>
-                    </View>
-                    {items.map((it) =>
-                      it.kind === 'entry' ? (
-                        <EntryCard key={it.id} entry={it} />
-                      ) : (
-                        <ProactiveCard
-                          key={it.id}
-                          q={it}
-                          onAnswer={(q) => {
-                            setAnswering({ label: q.question, questionId: q.id });
-                            setTextOpen(true);
-                          }}
-                          onDismiss={(q) =>
-                            setQuestions((prev) =>
-                              prev.map((x) => (x.id === q.id ? { ...x, dismissed: true } : x)),
-                            )
-                          }
-                        />
-                      ),
-                    )}
-                  </View>
-                );
-              })}
-              <View style={{ height: 180 }} />
-            </ScrollView>
-
-            <Margin
-              height={streamHeight}
-              signal={signal}
-              anomalies={questions.filter((q) => !q.dismissed).map((q) => q.iso)}
-              scrollFraction={scrollFraction}
-              onCycle={() => setSignal(SIGNALS[(SIGNALS.indexOf(signal) + 1) % SIGNALS.length])}
-              onJump={(f) => {
-                const { content, viewport } = layout.current;
-                scrollRef.current?.scrollTo({ y: f * (content - viewport), animated: true });
-              }}
-            />
-          </>
-        )}
+      <View style={styles.gridWrap}>
+        <CyclePhaseGrid />
       </View>
 
-      {/* ---- outflow handle ---- */}
-      <Pressable onPress={() => setSheetOpen(true)} style={styles.outflowHandle}>
-        <View style={styles.handleBar} />
-      </Pressable>
+      <View style={styles.traceArea} onLayout={(e) => setTraceHeight(e.nativeEvent.layout.height)}>
+        <View style={{ flex: 1 }}>
+          {traceHeight > 0 && (
+            <CompressedView
+              entries={entries}
+              questions={questions}
+              signal={signal}
+              height={Math.max(0, traceHeight - 96)}
+              width={width}
+            />
+          )}
+        </View>
+      </View>
 
       {/* ---- capture: the only inputs; no chat ---- */}
-      {!compressed && (
-        <>
-          <VoiceCapture
-            active={voiceActive}
-            onTranscript={(t) => (voiceTranscript.current = t)}
-          />
-          <CaptureBar
-            followUp={followUp}
-            voiceActive={voiceActive}
-            onVoicePressIn={() => setVoiceActive(true)}
-            onVoicePressOut={onVoiceRelease}
-            onTextPress={() => {
-              setAnswering(null);
-              setTextOpen(true);
-            }}
-            onFollowUpAnswer={() => {
-              setAnswering(followUp ? { label: followUp } : null);
-              setTextOpen(true);
-            }}
-            onFollowUpDismiss={() => setFollowUp(null)}
-          />
-        </>
-      )}
+      <VoiceCapture
+        active={voiceActive}
+        onTranscript={(t) => (voiceTranscript.current = t)}
+      />
+      <CaptureBar
+        followUp={followUp}
+        voiceActive={voiceActive}
+        onVoicePressIn={() => setVoiceActive(true)}
+        onVoicePressOut={onVoiceRelease}
+        onTextPress={() => {
+          setAnswering(null);
+          setTextOpen(true);
+        }}
+        onFollowUpAnswer={() => {
+          setAnswering(followUp ? { label: followUp } : null);
+          setTextOpen(true);
+        }}
+        onFollowUpDismiss={() => setFollowUp(null)}
+      />
 
       <TextCapture
         visible={textOpen}
@@ -354,102 +262,38 @@ export default function App() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
-    paddingTop: 46,
-    paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingTop: 56,
+    paddingHorizontal: 24,
+    paddingBottom: 6,
   },
-  inflowHandle: {
-    position: 'absolute',
-    top: 40,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingVertical: 4,
-    zIndex: 5,
+  gridWrap: {
+    paddingHorizontal: 24,
   },
-  handleBar: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(33,31,25,0.25)',
+  traceArea: {
+    flex: 1,
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 12,
-    marginTop: 8,
+    alignItems: 'center',
+    marginBottom: 6,
   },
   wordmark: {
-    fontFamily: fonts.display,
-    fontSize: 26,
+    fontFamily: fonts.displaySoft,
+    fontSize: 24,
     color: colors.ink,
-    letterSpacing: -1,
+    letterSpacing: -0.8,
   },
-  headerMeta: {
-    fontFamily: fonts.monoMed,
-    fontSize: 10,
-    color: colors.ink,
-    backgroundColor: 'rgba(182, 223, 72, 0.4)',
-    borderRadius: 999,
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    overflow: 'hidden',
-  },
-  toggle: {
+  headerActions: {
     marginLeft: 'auto',
     flexDirection: 'row',
-    gap: 10,
+    gap: 4,
   },
-  toggleText: {
-    fontFamily: fonts.monoMed,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: colors.muted,
-    paddingBottom: 2,
-  },
-  toggleTextOn: {
-    color: colors.ink,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.tennis,
-  },
-  streamContent: {
-    paddingHorizontal: 18,
-    paddingRight: 34, // room for the Margin
-    paddingTop: 6,
-  },
-  dayRule: {
-    flexDirection: 'row',
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  dayDate: {
-    fontFamily: fonts.monoMed,
-    fontSize: 9,
-    letterSpacing: 1,
-    color: colors.ink,
-    backgroundColor: colors.paper,
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    overflow: 'hidden',
-  },
-  dayDateToday: {
-    backgroundColor: colors.tennis,
-  },
-  dayMeta: {
-    fontFamily: fonts.mono,
-    fontSize: 9,
-    color: colors.muted,
-  },
-  outflowHandle: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingVertical: 5,
-    zIndex: 5,
+    justifyContent: 'center',
+    backgroundColor: colors.cream,
   },
 });

@@ -3,27 +3,34 @@
 // one flat lime accent, off-black panels, pills. Flat and crisp — no warmth, no texture.
 
 export const colors = {
-  ink: '#171714',
-  inkSoft: '#45453F',
-  // token kept from v1 but now an airy green-white surface, NOT beige, NOT gray
-  cream: '#F1F3EA',
-  creamDeep: '#E3E7D8',
-  pistachio: '#A3C55B',
-  pistachioDeep: '#6C8A34',
-  tennis: '#B6DF48',
-  tennisGlow: 'rgba(182, 223, 72, 0.5)',
-  muted: '#82827A',
-  rule: '#D8DCCC',
-  paper: '#FFFFFF', // card white
+  ink: '#20211F',
+  inkSoft: '#5F625D',
+  cream: '#F5F5F1',
+  creamDeep: '#EAEBE5',
+  pistachio: '#DCE6DC',
+  pistachioDeep: '#5F7564',
+  tennis: '#D3E0D1',
+  tennisGlow: 'rgba(95, 117, 100, 0.14)',
+  muted: '#8A8D87',
+  rule: '#E2E3DE',
+  paper: '#FCFCFA',
 };
 
 // The cycle phase is the ambient temperature of the surface itself —
-// light, optimistic pastels. Never beige, never gloom.
+// barely-there adult tints; the phase strip carries the explicit signal.
 export const phaseTint: Record<Phase, string> = {
-  menstrual: '#F7E7E8', // soft rose
-  follicular: '#EAF2DC', // fresh green
-  ovulation: '#F0F7CD', // brightest, lime
-  luteal: '#F0EEE8', // calm neutral-light
+  menstrual: '#F5F0EF',
+  follicular: '#F1F4EF',
+  ovulation: '#F3F5EF',
+  luteal: '#F2F2EE',
+};
+
+// Saturated-but-sober phase colors for the GitHub-style strip.
+export const phaseStrong: Record<Phase, string> = {
+  menstrual: '#C9A4A2',
+  follicular: '#9EB49C',
+  ovulation: '#B8C99F',
+  luteal: '#B8B7AF',
 };
 
 export type Phase = 'menstrual' | 'follicular' | 'ovulation' | 'luteal';

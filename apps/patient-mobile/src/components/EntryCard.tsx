@@ -23,15 +23,6 @@ export function EntryCard({ entry }: { entry: Entry }) {
         <Text style={styles.category}>{entry.category.toUpperCase()}</Text>
       </View>
 
-      <View style={styles.contextRow}>
-        <Text style={styles.context}>
-          CD {entry.context.cycleDay} · {phaseLabel[entry.context.phase].toLowerCase()} ·{' '}
-          {entry.context.sleepHours.toFixed(1)} h sleep · {entry.context.signalValue}{' '}
-          {entry.context.signalName.toLowerCase()}
-        </Text>
-        <Text style={styles.viaMark}>{entry.via === 'voice' ? '◉ voice' : '¶ text'}</Text>
-      </View>
-
       {expanded && (
         <View style={styles.provenance}>
           <Text style={styles.raw}>“{entry.raw}”</Text>
@@ -55,10 +46,11 @@ export function EntryCard({ entry }: { entry: Entry }) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.paper,
-    borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    borderRadius: 8,
+    borderTopWidth: 3,
+    borderTopColor: colors.ink,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
   },
   headRow: {
     flexDirection: 'row',
@@ -72,8 +64,8 @@ const styles = StyleSheet.create({
   },
   symptom: {
     fontFamily: fonts.display,
-    fontSize: 18,
-    letterSpacing: -0.4,
+    fontSize: 22,
+    letterSpacing: -0.6,
     color: colors.ink,
   },
   dots: { flexDirection: 'row', gap: 3, alignSelf: 'center' },
@@ -97,34 +89,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: colors.inkSoft,
-    marginBottom: 10,
-  },
-  contextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  context: {
-    flex: 1,
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    color: colors.muted,
-  },
-  viaMark: {
-    fontFamily: fonts.mono,
-    fontSize: 9,
-    color: colors.muted,
+    marginBottom: 4,
   },
   provenance: {
-    marginTop: 8,
+    marginTop: 12,
     backgroundColor: colors.cream,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 12,
   },
   provTitle: {
     fontFamily: fonts.monoMed,
-    fontSize: 8,
-    letterSpacing: 2,
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: colors.muted,
     marginBottom: 6,
   },
