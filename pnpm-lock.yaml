@@ -13,7 +13,7 @@ patchedDependencies:
     hash: vfaqzhkjtdiecjjsuy3uurs5hi
     path: patches/expo-constants@18.0.13.patch
   react-native-audio-api@0.10.3:
-    hash: hnzrtbxmkj2aff53hzhg7y4wbi
+    hash: uuzfptpaeugfyfvg7xgxive2za
     path: patches/react-native-audio-api@0.10.3.patch
 
 importers:
@@ -170,7 +170,7 @@ importers:
         version: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
       react-native-audio-api:
         specifier: 0.10.3
-        version: 0.10.3(patch_hash=hnzrtbxmkj2aff53hzhg7y4wbi)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+        version: 0.10.3(patch_hash=uuzfptpaeugfyfvg7xgxive2za)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-gesture-handler:
         specifier: ~2.28.0
         version: 2.28.0(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -12408,7 +12408,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-native-audio-api@0.10.3(patch_hash=hnzrtbxmkj2aff53hzhg7y4wbi)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+  react-native-audio-api@0.10.3(patch_hash=uuzfptpaeugfyfvg7xgxive2za)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)

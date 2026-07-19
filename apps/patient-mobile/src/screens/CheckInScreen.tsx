@@ -7,6 +7,7 @@ import * as Haptics from "expo-haptics";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-native-markdown-display";
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -24,9 +25,13 @@ import { SoftPressable } from "../components/SoftPressable";
 import { Waveform } from "../components/Waveform";
 import { useAuth } from "../auth/AuthProvider";
 import {
+  applyVoiceOutputRoute,
   createConversationClient,
+  labelForOutputRoute,
+  listVoiceOutputOptions,
   type ConversationEvent,
   type ConversationSession,
+  type VoiceOutputRoute,
 } from "../lib/conversation-client";
 import { appConfig } from "../lib/app-config";
 import { createHeyJuleApi } from "../lib/heyjule-api";
@@ -95,6 +100,7 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [voiceLevel, setVoiceLevel] = useState(0.08);
   const [voiceDuration, setVoiceDuration] = useState(0);
+  const [outputRoute, setOutputRoute] = useState<VoiceOutputRoute>("speaker");
 
   const chatTransport = useMemo(() => {
     const authenticatedFetch: typeof globalThis.fetch = async (input, init) => {
@@ -214,6 +220,49 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
     }
   }
 
+  function selectOutputRoute(route: VoiceOutputRoute) {
+    setOutputRoute(route);
+    const session = sessionRef.current;
+    if (session) {
+      session.setOutputRoute(route);
+    } else {
+      // Prefers speaker before the session starts so the first words are loud.
+      applyVoiceOutputRoute(route);
+    }
+    void Haptics.selectionAsync();
+  }
+
+  function openOutputDevicePicker() {
+    const options = listVoiceOutputOptions();
+    const labels = options.map((option) => option.label);
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: "Play Jule through",
+          options: [...labels, "Cancel"],
+          cancelButtonIndex: labels.length,
+          userInterfaceStyle: "light",
+        },
+        (buttonIndex) => {
+          const option = options[buttonIndex];
+          if (option) selectOutputRoute(option.route);
+        },
+      );
+      return;
+    }
+    Alert.alert(
+      "Play Jule through",
+      "Choose where you hear the conversation.",
+      [
+        ...options.map((option) => ({
+          text: option.route === outputRoute ? `✓ ${option.label}` : option.label,
+          onPress: () => selectOutputRoute(option.route),
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
+  }
+
   async function startRecording() {
     if (voiceActive) return;
     setVoiceState("connecting");
@@ -223,7 +272,9 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
     const controller = new AbortController();
     sessionAbortRef.current = controller;
     try {
-      const session = await conversationClient.start(handleConversationEvent, controller.signal);
+      const session = await conversationClient.start(handleConversationEvent, controller.signal, {
+        outputRoute,
+      });
       if (controller.signal.aborted) {
         await session.end();
         return;
@@ -494,6 +545,21 @@ export function CheckInScreen({ onClose, onComplete }: CheckInScreenProps) {
           <Waveform level={voiceLevel} active={voiceActive} />
           <Text style={styles.timer}>{formatDuration(voiceDuration)}</Text>
 
+          <SoftPressable
+            onPress={openOutputDevicePicker}
+            style={styles.outputDeviceChip}
+            accessibilityLabel={`Audio output: ${labelForOutputRoute(outputRoute)}. Change output device.`}
+            accessibilityHint="Choose speaker or phone earpiece"
+          >
+            <Ionicons
+              name={outputRoute === "speaker" ? "volume-high" : "ear-outline"}
+              size={16}
+              color={colors.oliveDeep}
+            />
+            <Text style={styles.outputDeviceChipText}>{labelForOutputRoute(outputRoute)}</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.inkFaint} />
+          </SoftPressable>
+
           <View style={styles.voiceControls}>
             <SoftPressable
               onPress={() => {
@@ -733,6 +799,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontVariant: ["tabular-nums"],
     marginTop: 6,
+  },
+  outputDeviceChip: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.72)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.lineStrong,
+  },
+  outputDeviceChipText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: "600",
   },
   voiceControls: {
     width: "100%",

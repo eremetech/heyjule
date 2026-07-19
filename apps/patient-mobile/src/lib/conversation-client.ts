@@ -9,6 +9,8 @@ const BUFFER_LENGTH = 2_400;
 const MODEL = "grok-voice-latest";
 const VOICE = "carina";
 const CONNECT_TIMEOUT_MS = 12_000;
+/** Playback gain: realtime PCM deltas often sit well below full scale. */
+const PLAYBACK_GAIN = 2.4;
 
 const AGENT_INSTRUCTIONS = [
   "You are Jule, a warm, concise health check-in companion.",
@@ -17,6 +19,16 @@ const AGENT_INSTRUCTIONS = [
   "If the patient describes a possible emergency or immediate danger, tell them to contact local emergency services now.",
   "Use plain, compassionate language. Keep each spoken response to at most two short sentences.",
 ].join(" ");
+
+/** Built-in routes the user can pick for voice playback. */
+export type VoiceOutputRoute = "speaker" | "earpiece";
+
+export type VoiceOutputOption = {
+  id: VoiceOutputRoute;
+  label: string;
+  description: string;
+  route: VoiceOutputRoute;
+};
 
 export type ConversationEvent =
   | { type: "agent_text"; text: string }
@@ -29,12 +41,15 @@ export type ConversationEvent =
 export type ConversationSession = {
   end: () => Promise<void>;
   sendText: (text: string) => Promise<void>;
+  setOutputRoute: (route: VoiceOutputRoute) => void;
+  getOutputRoute: () => VoiceOutputRoute;
 };
 
 export type ConversationClient = {
   start: (
     onEvent: (event: ConversationEvent) => void,
     signal?: AbortSignal,
+    options?: { outputRoute?: VoiceOutputRoute },
   ) => Promise<ConversationSession>;
 };
 
@@ -47,6 +62,69 @@ type RealtimeEvent = {
   message?: string;
   ping_timestamp?: number;
 };
+
+const OUTPUT_OPTIONS: VoiceOutputOption[] = [
+  {
+    id: "speaker",
+    label: "Speaker",
+    description: "Play through the loudspeaker",
+    route: "speaker",
+  },
+  {
+    id: "earpiece",
+    label: "Phone",
+    description: "Play quietly through the earpiece",
+    route: "earpiece",
+  },
+];
+
+export function listVoiceOutputOptions(): VoiceOutputOption[] {
+  return OUTPUT_OPTIONS;
+}
+
+export function labelForOutputRoute(route: VoiceOutputRoute) {
+  return OUTPUT_OPTIONS.find((option) => option.route === route)?.label ?? "Speaker";
+}
+
+/**
+ * Route voice playback.
+ *
+ * Speaker: playAndRecord + default mode + defaultToSpeaker. Avoid
+ * allowBluetooth (HFP) — it pins many iPhones into quiet "phone call" routing.
+ * A2DP still allows Bluetooth headphones when connected.
+ *
+ * Earpiece: voiceChat without defaultToSpeaker for private listening.
+ *
+ * Native patch re-applies overrideOutputAudioPort after every engine start.
+ */
+export function applyVoiceOutputRoute(route: VoiceOutputRoute) {
+  if (route === "speaker") {
+    AudioManager.setAudioSessionOptions({
+      iosCategory: "playAndRecord",
+      iosMode: "default",
+      iosOptions: ["defaultToSpeaker", "allowBluetoothA2DP", "allowAirPlay"],
+    });
+    return;
+  }
+  AudioManager.setAudioSessionOptions({
+    iosCategory: "playAndRecord",
+    iosMode: "voiceChat",
+    iosOptions: ["allowBluetooth", "allowBluetoothA2DP"],
+  });
+}
+
+async function logCurrentAudioRoute(tag: string) {
+  if (!__DEV__) return;
+  try {
+    const info = await AudioManager.getDevicesInfo();
+    const outputs = info.currentOutputs?.map((d) => `${d.name}/${d.category}`).join(", ")
+      || info.availableOutputs?.map((d) => `${d.name}/${d.category}`).join(", ")
+      || "unknown";
+    console.log(`[voice] route (${tag}): ${outputs}`);
+  } catch (error) {
+    console.log(`[voice] route (${tag}): failed`, error);
+  }
+}
 
 function floatPcmToBase64(samples: Float32Array) {
   const bytes = new Uint8Array(samples.length * 2);
@@ -80,16 +158,20 @@ function parseEvent(data: unknown): RealtimeEvent | null {
 
 export function createConversationClient(getToken: TokenProvider): ConversationClient {
   return {
-    async start(onEvent, signal) {
+    async start(onEvent, signal, options) {
       const permission = await AudioManager.requestRecordingPermissions();
       if (permission !== "Granted") throw new Error("Microphone permission was not granted");
       const { token } = await getToken();
       if (signal?.aborted) throw new Error("Voice session cancelled");
-      AudioManager.setAudioSessionOptions({
-        iosCategory: "playAndRecord",
-        iosMode: "voiceChat",
-        iosOptions: ["allowBluetooth", "defaultToSpeaker"],
-      });
+
+      let outputRoute: VoiceOutputRoute = options?.outputRoute ?? "speaker";
+      // Activate the session before creating the recorder/context so the graph
+      // binds to this route. Re-apply after engine/recorder start (engine restarts
+      // clear overrideOutputAudioPort on iOS).
+      applyVoiceOutputRoute(outputRoute);
+      await AudioManager.setAudioSessionActivity(true);
+      void logCurrentAudioRoute("session-active");
+
       const socket = new WebSocket(
         `wss://api.x.ai/v1/realtime?model=${encodeURIComponent(MODEL)}`,
         [`xai-client-secret.${token}`],
@@ -99,22 +181,44 @@ export function createConversationClient(getToken: TokenProvider): ConversationC
         bufferLengthInSamples: BUFFER_LENGTH,
       });
       const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+      const gain = audioContext.createGain();
+      gain.gain.value = PLAYBACK_GAIN;
       const output = audioContext.createBufferQueueSource();
-      output.connect(audioContext.destination);
+      output.connect(gain);
+      gain.connect(audioContext.destination);
       output.start();
 
       let ended = false;
       let assistantTranscript = "";
       let playbackChain = Promise.resolve();
       let playbackGeneration = 0;
+      let lastPlaybackLog = 0;
 
       const send = (value: unknown) => {
         if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(value));
       };
 
+      const enforceOutputRoute = (reason: string) => {
+        applyVoiceOutputRoute(outputRoute);
+        void logCurrentAudioRoute(reason);
+      };
+
+      const setOutputRoute = (route: VoiceOutputRoute) => {
+        outputRoute = route;
+        enforceOutputRoute(`user-select-${route}`);
+      };
+
+      const routeSubscription = AudioManager.addSystemEventListener("routeChange", (event) => {
+        if (ended) return;
+        if (__DEV__) console.log("[voice] system routeChange", event.reason);
+        // Re-force preferred route after OS / engine reconfiguration.
+        enforceOutputRoute(`routeChange-${event.reason}`);
+      });
+
       const end = async () => {
         if (ended) return;
         ended = true;
+        routeSubscription?.remove();
         try {
           recorder.stop();
         } catch {
@@ -166,6 +270,8 @@ export function createConversationClient(getToken: TokenProvider): ConversationC
           case "response.created":
             assistantTranscript = "";
             onEvent({ type: "status", value: "speaking" });
+            // Speaking path is when quiet earpiece is most noticeable — re-pin route.
+            enforceOutputRoute("response-created");
             break;
           case "response.output_audio_transcript.delta":
           case "response.audio_transcript.delta":
@@ -187,7 +293,23 @@ export function createConversationClient(getToken: TokenProvider): ConversationC
                 .then(async () => {
                   if (ended) return;
                   const buffer = await audioContext.decodePCMInBase64(delta, SAMPLE_RATE, 1, true);
-                  if (!ended && generation === playbackGeneration) output.enqueueBuffer(buffer);
+                  if (ended || generation !== playbackGeneration) return;
+                  if (__DEV__ && Date.now() - lastPlaybackLog > 2000) {
+                    lastPlaybackLog = Date.now();
+                    let peak = 0;
+                    try {
+                      const channel = buffer.getChannelData(0);
+                      for (let i = 0; i < channel.length; i++) {
+                        peak = Math.max(peak, Math.abs(channel[i] ?? 0));
+                      }
+                    } catch {
+                      // ignore probe failures
+                    }
+                    console.log(
+                      `[voice] playback peak=${peak.toFixed(3)} frames=${buffer.length} gain=${PLAYBACK_GAIN}`,
+                    );
+                  }
+                  output.enqueueBuffer(buffer);
                 })
                 .catch(() => undefined);
             }
@@ -214,7 +336,6 @@ export function createConversationClient(getToken: TokenProvider): ConversationC
       try {
         await connected;
         if (signal?.aborted) throw new Error("Voice session cancelled");
-        await AudioManager.setAudioSessionActivity(true);
         await audioContext.resume();
         send({
           type: "session.update",
@@ -224,7 +345,7 @@ export function createConversationClient(getToken: TokenProvider): ConversationC
             reasoning: { effort: "high" },
             turn_detection: {
               type: "server_vad",
-              threshold: 0.72,
+              threshold: 0.5,
               silence_duration_ms: 700,
               prefix_padding_ms: 350,
             },
@@ -234,13 +355,25 @@ export function createConversationClient(getToken: TokenProvider): ConversationC
             },
           },
         });
+        let lastMicLog = 0;
         recorder.onAudioReady(({ buffer }) => {
           if (ended || socket.readyState !== WebSocket.OPEN) return;
           const samples = buffer.getChannelData(0);
-          onEvent({ type: "audio_level", value: rmsLevel(samples) });
+          const level = rmsLevel(samples);
+          if (__DEV__ && Date.now() - lastMicLog > 2000) {
+            lastMicLog = Date.now();
+            console.log(`[voice] mic rms=${level.toFixed(3)} samples=${samples.length}`);
+          }
+          onEvent({ type: "audio_level", value: level });
           send({ type: "input_audio_buffer.append", audio: floatPcmToBase64(samples) });
         });
+        // Recorder start restarts AVAudioEngine and commonly clears the speaker override.
         recorder.start();
+        enforceOutputRoute("after-recorder-start");
+        // One more tick after the engine finishes settling.
+        setTimeout(() => {
+          if (!ended) enforceOutputRoute("post-engine-settle");
+        }, 250);
         onEvent({ type: "status", value: "listening" });
       } catch (error) {
         await end();
@@ -249,6 +382,8 @@ export function createConversationClient(getToken: TokenProvider): ConversationC
 
       return {
         end,
+        setOutputRoute,
+        getOutputRoute: () => outputRoute,
         async sendText(text) {
           const value = text.trim();
           if (!value || ended) return;

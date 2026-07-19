@@ -1,7 +1,94 @@
+diff --git a/ios/audioapi/ios/system/AudioEngine.mm b/ios/audioapi/ios/system/AudioEngine.mm
+index b2620139ebc408c67c96cc18a99e5874804f9d75..5d130a6c61f5cb88cbdb285994f1767f63c2dd78 100644
+--- a/ios/audioapi/ios/system/AudioEngine.mm
++++ b/ios/audioapi/ios/system/AudioEngine.mm	
+@@ -112,6 +112,8 @@ - (bool)startEngine
+     return false;
+   }
+ 
++  // Engine start often resets the playAndRecord route to the earpiece — re-force speaker.
++  [self.sessionManager applyOutputPortOverride];
+   return true;
+ }
+ 
+diff --git a/ios/audioapi/ios/system/AudioSessionManager.h b/ios/audioapi/ios/system/AudioSessionManager.h
+index 19474ad116a65b02fb9a7b8250af81484ab0ad3f..22e47fdacfa1a856a66b2b408b95bd99944142e1 100644
+--- a/ios/audioapi/ios/system/AudioSessionManager.h
++++ b/ios/audioapi/ios/system/AudioSessionManager.h	
+@@ -20,6 +20,7 @@
+ - (void)cleanup;
+ - (bool)configureAudioSession;
+ - (bool)reconfigureAudioSession;
++- (void)applyOutputPortOverride;
+ - (void)markSettingsAsDirty;
+ 
+ - (NSNumber *)getDevicePreferredSampleRate;
+diff --git a/ios/audioapi/ios/system/AudioSessionManager.mm b/ios/audioapi/ios/system/AudioSessionManager.mm
+index 5c22a17256c99212fb35af0913a9338087c60efc..54d8ac2c71ac335f4e3e76b3c77bbe00aa34a802 100644
+--- a/ios/audioapi/ios/system/AudioSessionManager.mm
++++ b/ios/audioapi/ios/system/AudioSessionManager.mm	
+@@ -153,6 +153,9 @@ - (bool)setActive:(bool)active
+ 
+   if (success) {
+     self.isActive = active;
++    if (active) {
++      [self applyOutputPortOverride];
++    }
+   }
+ 
+   if (error != nil) {
+@@ -172,6 +175,8 @@ - (bool)configureAudioSession
+   }
+ 
+   if (![self hasDirtySettings]) {
++    // Still re-apply port override — AVAudioEngine start/stop often clears it.
++    [self applyOutputPortOverride];
+     return true;
+   }
+ 
+@@ -201,9 +206,38 @@ - (bool)configureAudioSession
+   }
+ 
+   self.hasDirtySettings = false;
++  [self applyOutputPortOverride];
+   return true;
+ }
+ 
++- (void)applyOutputPortOverride
++{
++  if (!self.shouldManageSession) {
++    return;
++  }
++  if (self.sessionCategory != AVAudioSessionCategoryPlayAndRecord) {
++    return;
++  }
++
++  BOOL wantSpeaker = (self.sessionOptions & AVAudioSessionCategoryOptionDefaultToSpeaker) != 0;
++  AVAudioSessionPortOverride portOverride =
++      wantSpeaker ? AVAudioSessionPortOverrideSpeaker : AVAudioSessionPortOverrideNone;
++  NSError *error = nil;
++  BOOL ok = [self.audioSession overrideOutputAudioPort:portOverride error:&error];
++  if (!ok || error != nil) {
++    NSLog(
++        @"[AudioSessionManager] overrideOutputAudioPort(%@) failed: %@",
++        wantSpeaker ? @"speaker" : @"none",
++        error != nil ? [error debugDescription] : @"unknown");
++  } else {
++    NSLog(@"[AudioSessionManager] overrideOutputAudioPort -> %@", wantSpeaker ? @"SPEAKER" : @"NONE");
++  }
++
++  for (AVAudioSessionPortDescription *output in self.audioSession.currentRoute.outputs) {
++    NSLog(@"[AudioSessionManager] current output: %@ (%@)", output.portName, output.portType);
++  }
++}
++
+ - (bool)reconfigureAudioSession
+ {
+   self.hasDirtySettings = true;
 diff --git a/package.json b/package.json
 index c51cf2d5839e3fbdc1c3206faaaba6d5ddbc3bbb..b3088c9d397515892044d667f43dd8abb77d4337 100644
 --- a/package.json
-+++ b/package.json
++++ b/package.json	
 @@ -150,6 +150,11 @@
      "name": "rnaudioapi",
      "type": "modules",

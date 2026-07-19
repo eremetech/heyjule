@@ -5,6 +5,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SoftPressable } from "../components/SoftPressable";
+import { WaveLoading } from "../components/WaveLoading";
 import { ApiError } from "../lib/heyjule-api";
 import { useHealthStore } from "../store/HealthStore";
 import { colors, shadows, typography } from "../theme";
@@ -212,6 +213,7 @@ export function ShareScreen({ onClose }: ShareScreenProps) {
               <ExportCard
                 key={value.id}
                 value={value}
+                doctorName={careLinks.find((link) => link.doctorId === value.doctorId)?.doctorName}
                 onRevoke={() => void revokeDoctorExport(value.id)}
               />
             ))}
@@ -223,8 +225,10 @@ export function ShareScreen({ onClose }: ShareScreenProps) {
             {careLinks.map((relationship) => (
               <View key={relationship.doctorId} style={styles.card}>
                 <View style={styles.cardCopy}>
-                  <Text style={styles.cardTitle}>Clinician</Text>
-                  <Text style={styles.cardDetail}>{relationship.doctorId}</Text>
+                  <Text style={styles.cardTitle}>{relationship.doctorName ?? "Your clinician"}</Text>
+                  <Text style={styles.cardDetail}>
+                    Linked {new Date(relationship.linkedAt).toLocaleDateString()}
+                  </Text>
                 </View>
                 <View style={styles.cardActions}>
                   <SoftPressable onPress={() => openExport(relationship.doctorId)} style={styles.sendButton}>
@@ -289,7 +293,7 @@ export function ShareScreen({ onClose }: ShareScreenProps) {
               {careLinks.map((relationship) => (
                 <Chip
                   key={relationship.doctorId}
-                  label={relationship.doctorId}
+                  label={relationship.doctorName ?? `Clinician ${relationship.doctorId.slice(0, 6)}`}
                   on={selectedDoctorId === relationship.doctorId}
                   onPress={() => setSelectedDoctorId(relationship.doctorId)}
                 />
@@ -350,6 +354,7 @@ export function ShareScreen({ onClose }: ShareScreenProps) {
           </>
         ) : null}
       </ScrollView>
+      {creating ? <WaveLoading /> : null}
     </View>
   );
 }
@@ -377,16 +382,18 @@ function BackButton({ onPress }: { onPress: () => void }) {
 
 function ExportCard({
   value,
+  doctorName,
   onRevoke,
 }: {
   value: DoctorExportMetadata;
+  doctorName?: string;
   onRevoke: () => void;
 }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardCopy}>
-        <Text style={styles.cardTitle}>Encrypted for clinician</Text>
-        <Text style={styles.cardDetail}>{value.doctorId}</Text>
+        <Text style={styles.cardTitle}>Encrypted for {doctorName ?? "your clinician"}</Text>
+        <Text style={styles.cardDetail}>Only their browser key can open this report</Text>
         <Text style={styles.countdown}>Expires in {countdown(value.expiresAt)}</Text>
       </View>
       <SoftPressable
