@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   bubbleDismiss: { fontFamily: fonts.mono, fontSize: 11, color: colors.muted },
   dock: {
     alignItems: 'center',
-    backgroundColor: 'rgba(230, 230, 225, 0.92)',
+    backgroundColor: 'rgba(249, 249, 245, 0.9)',
     borderRadius: 32,
     paddingVertical: 12,
     paddingHorizontal: 14,

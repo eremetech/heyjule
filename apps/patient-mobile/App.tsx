@@ -236,7 +236,7 @@ export default function App() {
                 return (
                   <View key={d.iso}>
                     <View style={styles.dayRule}>
-                      <Text style={styles.dayDate}>
+                      <Text style={[styles.dayDate, isToday && styles.dayDateToday]}>
                         {isToday ? 'TODAY' : d.iso.slice(5).replace('-', '·')}
                       </Text>
                       <View style={styles.dayLine} />
@@ -425,10 +425,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.inkSoft,
   },
+  dayDateToday: {
+    backgroundColor: colors.tennis,
+    color: colors.ink,
+    borderRadius: 999,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    overflow: 'hidden',
+  },
   dayLine: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(33,31,25,0.2)',
+    backgroundColor: 'rgba(23,23,20,0.12)',
   },
   dayMeta: {
     fontFamily: fonts.mono,

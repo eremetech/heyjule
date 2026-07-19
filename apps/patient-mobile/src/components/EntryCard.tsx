@@ -23,8 +23,6 @@ export function EntryCard({ entry }: { entry: Entry }) {
         <Text style={styles.category}>{entry.category.toUpperCase()}</Text>
       </View>
 
-      <Text style={styles.raw}>“{entry.raw}”</Text>
-
       <View style={styles.contextRow}>
         <Text style={styles.context}>
           CD {entry.context.cycleDay} · {phaseLabel[entry.context.phase].toLowerCase()} ·{' '}
@@ -36,6 +34,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
 
       {expanded && (
         <View style={styles.provenance}>
+          <Text style={styles.raw}>“{entry.raw}”</Text>
           <Text style={styles.provTitle}>PROVENANCE</Text>
           {entry.context.sources.map((s, i) => (
             <View key={i} style={styles.provRow}>
@@ -98,15 +97,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: colors.inkSoft,
-    marginTop: 6,
+    marginBottom: 10,
   },
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.rule,
-    paddingTop: 7,
+    marginTop: 10,
   },
   context: {
     flex: 1,

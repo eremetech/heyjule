@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path, Polyline } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { smoothPath } from '../lib/path';
 import { colors, fonts, phaseLabel, phaseTint } from '../theme';
 import {
   days,
@@ -42,13 +43,12 @@ export function CompressedView({
     const span = max - min || 1;
     const x0 = width * 0.55;
     const x1 = width - 20;
-    return values
-      .map((v, i) => {
-        const y = 15 + i * rowH + rowH / 2;
-        const x = x0 + ((v - min) / span) * (x1 - x0);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
+    return smoothPath(
+      values.map((v, i) => ({
+        x: x0 + ((v - min) / span) * (x1 - x0),
+        y: 15 + i * rowH + rowH / 2,
+      })),
+    );
   }, [signal, rowH, width]);
 
   // phase band segments
@@ -92,12 +92,12 @@ export function CompressedView({
 
       {/* widened signal trace + markers */}
       <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Polyline
-          points={trace}
+        <Path
+          d={trace}
           fill="none"
           stroke={colors.pistachioDeep}
-          strokeWidth={1.5}
-          strokeLinejoin="round"
+          strokeWidth={1.6}
+          strokeLinecap="round"
         />
         {questions.filter((q) => !q.dismissed).map((q) => {
           const y = yOf(q.iso);

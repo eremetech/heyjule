@@ -1,13 +1,18 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Polyline, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { colors, fonts } from '../theme';
 import { days, signalMeta, type SignalKey } from '../data/mock';
+import { smoothPath, angleAt, type Pt } from '../lib/path';
 
-const W = 24;
+const W = 26;
 
-// The Margin: ~24px of living chart down the right edge,
-// aligned to the Stream's time axis. Replaces an entire chart screen.
+// A small leaf, drawn at the origin pointing right; scaled ~7px long.
+const LEAF = 'M 0 0 C 2.5 -3, 6 -3, 8 0 C 6 3, 2.5 3, 0 0 Z';
+
+// The Margin as a vine: the signal grows up the edge of the Stream as a smooth
+// stem with small leaves; anomalies ripen into lime berries. Same data,
+// friendlier plant.
 export function Margin({
   height,
   signal,
@@ -25,23 +30,32 @@ export function Margin({
 }) {
   const meta = signalMeta[signal];
 
-  const { points, glowYs } = useMemo(() => {
+  const { stem, leaves, berries } = useMemo(() => {
     const values = days.map((d) => d[signal]);
     const min = Math.min(...values);
     const max = Math.max(...values);
     const span = max - min || 1;
-    const pts = values
-      .map((v, i) => {
-        const y = (i / (days.length - 1)) * (height - 16) + 8;
-        const x = 4 + ((v - min) / span) * (W - 9);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
-    const glows = anomalies
+    const pts: Pt[] = values.map((v, i) => ({
+      x: 5 + ((v - min) / span) * (W - 12),
+      y: (i / (days.length - 1)) * (height - 16) + 8,
+    }));
+
+    // leaves sprout every few days, alternating sides of the stem
+    const lv = pts
+      .map((p, i) => ({ p, i }))
+      .filter(({ i }) => i % 4 === 2)
+      .map(({ p, i }, k) => {
+        const side = k % 2 === 0 ? 1 : -1;
+        const angle = angleAt(pts, i) + side * 55;
+        return { x: p.x, y: p.y, angle, side };
+      });
+
+    const br = anomalies
       .map((iso) => days.findIndex((d) => d.iso === iso))
       .filter((i) => i >= 0)
-      .map((i) => (i / (days.length - 1)) * (height - 16) + 8);
-    return { points: pts, glowYs: glows };
+      .map((i) => pts[i]);
+
+    return { stem: smoothPath(pts), leaves: lv, berries: br };
   }, [signal, height, anomalies]);
 
   const cursorY = 8 + scrollFraction * (height - 16);
@@ -52,28 +66,39 @@ export function Margin({
         style={StyleSheet.absoluteFill}
         onPress={(e) => {
           const y = e.nativeEvent.locationY;
-          const hit = glowYs.find((g) => Math.abs(g - y) < 18);
-          if (hit !== undefined) onJump((hit - 8) / (height - 16));
+          const hit = berries.find((b) => Math.abs(b.y - y) < 18);
+          if (hit) onJump((hit.y - 8) / (height - 16));
           else onCycle();
         }}
       >
         <Svg width={W} height={height}>
-          <Rect x={0} y={0} width={StyleSheet.hairlineWidth} height={height} fill={colors.rule} />
-          <Polyline
-            points={points}
+          {/* stem */}
+          <Path
+            d={stem}
             fill="none"
             stroke={colors.pistachioDeep}
-            strokeWidth={1.25}
-            strokeLinejoin="round"
+            strokeWidth={1.6}
+            strokeLinecap="round"
           />
-          {glowYs.map((y, i) => (
+          {/* leaves */}
+          {leaves.map((l, i) => (
+            <Path
+              key={i}
+              d={LEAF}
+              fill={colors.pistachio}
+              opacity={0.85}
+              transform={`translate(${l.x}, ${l.y}) rotate(${l.angle})`}
+            />
+          ))}
+          {/* berries at anomalies */}
+          {berries.map((b, i) => (
             <React.Fragment key={i}>
-              <Circle cx={W / 2} cy={y} r={8} fill={colors.tennisGlow} />
-              <Circle cx={W / 2} cy={y} r={3} fill={colors.tennis} stroke={colors.ink} strokeWidth={0.5} />
+              <Circle cx={b.x} cy={b.y} r={8} fill={colors.tennisGlow} />
+              <Circle cx={b.x} cy={b.y} r={4} fill={colors.tennis} stroke={colors.pistachioDeep} strokeWidth={1} />
             </React.Fragment>
           ))}
           {/* scroll cursor */}
-          <Rect x={0} y={cursorY - 1} width={5} height={2} fill={colors.ink} />
+          <Rect x={0} y={cursorY - 1} width={5} height={2} rx={1} fill={colors.ink} />
         </Svg>
       </Pressable>
       <View style={styles.labelWrap} pointerEvents="none">
