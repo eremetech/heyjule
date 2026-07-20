@@ -43,7 +43,7 @@ export function createConversationClient(): ConversationClient {
   return {
     async start() {
       throw new Error(
-        "Voice check-ins aren't available in the web preview yet. Use a text check-in here, or open the HeyJule mobile app for voice.",
+        "Voice check-ins need the microphone pipeline of the native app and aren't part of this web preview. Use a text check-in here, or run the HeyJule app from GitHub for the full experience.",
       );
     },
   };

@@ -4,8 +4,8 @@ import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 const SCREEN_WIDTH = 390;
 const SCREEN_HEIGHT = 844;
-/** Space the bezel and page padding need around the phone. */
-const CHROME = { horizontal: 120, vertical: 90 };
+/** Space the bezel, page padding, and bottom caption need around the phone. */
+const CHROME = { horizontal: 120, vertical: 170 };
 
 /* iPhone status-bar / home-indicator heights, so screens lay out exactly as
  * they do on the phone (every screen positions itself with safe-area insets). */
@@ -43,6 +43,19 @@ export function DeviceFrame({ children }: PropsWithChildren) {
           <div style={homeIndicatorStyle} />
         </div>
       </div>
+      <p style={captionStyle}>
+        This is a web preview of the HeyJule React&nbsp;Native app. Voice check-ins and other
+        native features need the real app —{" "}
+        <a
+          href="https://github.com/eremetech/heyjule"
+          target="_blank"
+          rel="noreferrer"
+          style={captionLinkStyle}
+        >
+          download it from GitHub
+        </a>{" "}
+        to try everything.
+      </p>
     </div>
   );
 }
@@ -55,6 +68,28 @@ const pageStyle: CSSProperties = {
   justifyContent: "center",
   background: "radial-gradient(120% 120% at 50% 0%, #F5F0EB 0%, #EAE2DA 55%, #DFD4C9 100%)",
   overflow: "hidden",
+};
+
+const captionStyle: CSSProperties = {
+  position: "absolute",
+  bottom: 16,
+  left: "50%",
+  transform: "translateX(-50%)",
+  maxWidth: 640,
+  width: "90%",
+  textAlign: "center",
+  fontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: "#76716C",
+  margin: 0,
+};
+
+const captionLinkStyle: CSSProperties = {
+  color: "#E95031",
+  fontWeight: 600,
+  textDecoration: "underline",
 };
 
 const bodyStyle: CSSProperties = {
