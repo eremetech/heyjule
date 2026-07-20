@@ -20,14 +20,13 @@
   }
 
   * { box-sizing: border-box; }
-  html, body { height: 100%; }
+  html { scroll-behavior: smooth; }
 
   body {
     margin: 0;
     font-family: var(--sans);
     color: var(--cream);
     background: var(--coral);
-    overflow: hidden;
     -webkit-font-smoothing: antialiased;
   }
   /* fine grain behind content */
@@ -142,6 +141,190 @@
     .half-left, .half-right { text-align: left; align-items: flex-start; }
     .half p { min-height: 0; }
   }
+
+  /* ============ landing chapters below the hero ============ */
+
+  .chapter {
+    position: relative;
+    z-index: 1;
+    padding: clamp(76px, 13vh, 160px) clamp(24px, 4vw, 64px);
+  }
+  .chapter-inner {
+    max-width: 1160px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(30px, 5vh, 56px);
+  }
+
+  .kicker {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 750;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--umber);
+  }
+  .chapter h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(46px, 7.4vw, 104px);
+    line-height: 0.95;
+    letter-spacing: 0.005em;
+    color: var(--cream);
+    max-width: 16ch;
+  }
+  .lede {
+    margin: 0;
+    max-width: 60ch;
+    font-size: clamp(15px, 1.9vh, 17.5px);
+    line-height: 1.65;
+    color: var(--umber);
+  }
+  .lede strong { color: var(--cream); font-weight: 650; }
+
+  /* video cards */
+  .shot {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .shot .frame {
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--cream);
+    box-shadow: 0 30px 70px rgba(58, 21, 10, 0.30);
+    outline: 1px solid rgba(255, 244, 237, 0.25);
+  }
+  .shot video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+  .shot figcaption {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--umber);
+    padding: 0 4px;
+  }
+  .shot figcaption b { color: var(--cream); font-weight: 700; }
+
+  /* layouts */
+  .feature {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(28px, 4.5vw, 64px);
+    align-items: center;
+  }
+  .feature .side { display: flex; flex-direction: column; gap: clamp(14px, 2.2vh, 22px); }
+  .feature.flip .side { order: 2; }
+  .side h3 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(30px, 3.6vw, 52px);
+    line-height: 1;
+    color: var(--cream);
+  }
+  .side p { margin: 0; font-size: clamp(14px, 1.8vh, 16px); line-height: 1.62; color: var(--umber); }
+  .side p strong { color: var(--cream); font-weight: 650; }
+
+  .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(18px, 2.4vw, 30px); }
+  .duo  { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(18px, 2.4vw, 30px); }
+
+  /* themed chapters */
+  .chapter-dark { background: var(--umber); }
+  .chapter-dark .kicker { color: rgba(255, 244, 237, 0.55); }
+  .chapter-dark h2, .chapter-dark .side h3 { color: var(--cream); }
+  .chapter-dark .lede, .chapter-dark .side p, .chapter-dark .shot figcaption { color: rgba(255, 244, 237, 0.72); }
+  .chapter-dark .lede strong, .chapter-dark .side p strong, .chapter-dark .shot figcaption b { color: var(--coral); }
+  .chapter-dark .shot .frame { box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); outline-color: rgba(255, 244, 237, 0.14); }
+
+  .chapter-cream { background: var(--cream); }
+  .chapter-cream .kicker { color: var(--coral-deep); }
+  .chapter-cream h2, .chapter-cream .side h3 { color: var(--coral); }
+  .chapter-cream .lede, .chapter-cream .side p, .chapter-cream .shot figcaption { color: var(--umber-soft); }
+  .chapter-cream .lede strong, .chapter-cream .side p strong, .chapter-cream .shot figcaption b { color: var(--umber); }
+  .chapter-cream .shot .frame { box-shadow: 0 26px 60px rgba(58, 21, 10, 0.18); outline-color: rgba(58, 21, 10, 0.10); }
+
+  /* the seam thread, carried between chapters */
+  .thread {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 44px;
+    height: clamp(70px, 12vh, 130px);
+    margin: calc(-1 * clamp(28px, 5vh, 60px)) auto;
+  }
+
+  /* how-it-flows steps */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(18px, 2.4vw, 30px);
+    counter-reset: step;
+  }
+  .step {
+    counter-increment: step;
+    border-top: 2px solid rgba(255, 244, 237, 0.45);
+    padding-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .step::before {
+    content: "0" counter(step);
+    font-family: var(--display);
+    font-size: clamp(22px, 2.4vw, 30px);
+    color: var(--cream);
+    opacity: 0.9;
+  }
+  .step h4 { margin: 0; font-size: 15px; font-weight: 750; color: var(--cream); }
+  .step p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--umber); }
+
+  /* closing call to action */
+  .cta-links { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(18px, 2.4vw, 30px); }
+  .cta-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: clamp(22px, 3.4vh, 36px) clamp(22px, 2.6vw, 40px);
+    border-radius: 20px;
+    border: 2px solid rgba(255, 244, 237, 0.4);
+    text-decoration: none;
+    color: var(--cream);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  .cta-card:hover { background: rgba(58, 21, 10, 0.14); border-color: var(--cream); }
+  .cta-card h3 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(32px, 4.4vw, 56px);
+    line-height: 1;
+  }
+  .cta-card p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--umber); }
+  .cta-card .go { display: inline-flex; align-items: center; gap: 8px; font-weight: 750; font-size: 15px; }
+  .cta-card:hover .go svg { transform: translate(3px, -3px); }
+
+  .endnote { display: flex; flex-direction: column; gap: 2px; }
+  .endnote p { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--umber); }
+  .endnote .scale { font-weight: 650; }
+
+  @media (max-width: 880px) {
+    .feature { grid-template-columns: 1fr; }
+    .feature.flip .side { order: 0; }
+    .trio, .duo, .steps, .cta-links { grid-template-columns: 1fr; }
+    .chapter h2 { max-width: none; }
+  }
+  @media (min-width: 881px) and (max-width: 1100px) {
+    .trio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
 </style>
 </head>
 <body>
@@ -197,6 +380,226 @@
   </footer>
 
 </div>
+
+<!-- ============ Chapter 01 · The patient side ============ -->
+<section class="chapter" id="patient">
+  <div class="chapter-inner">
+    <p class="kicker">01 · The patient side</p>
+    <h2>Say it when it happens.</h2>
+    <p class="lede">A consultation gives you <strong>about seven minutes</strong> — and the night
+      sweat from three weeks ago is exactly what you forget to mention. So HeyJule
+      records your story as you live it. <strong>A check-in with Jule takes about a minute</strong>,
+      by voice or text. Sleep, pulse and cycles sync from Apple Health on their own, and a symptom
+      you mentioned to ChatGPT lands on the same timeline through the connector.</p>
+
+    <div class="feature">
+      <div class="side">
+        <h3>A minute of talking, not a stack of forms.</h3>
+        <p>Tap once and speak: what happened, and how you feel about it. Jule asks the follow-up a
+          clinician would want answered and turns the conversation into a structured note you review
+          before anything is kept.
+          <strong>The raw audio context is temporary — only your reviewed note is saved.</strong></p>
+      </div>
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/PatientVoice.jpg" src="assets/video/PatientVoice.mp4"></video>
+        </div>
+        <figcaption><b>Voice check-in.</b> Jule is here with you — a live waveform, a timer, and nothing to fill in.</figcaption>
+      </figure>
+    </div>
+
+    <div class="trio">
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/PatientHome.jpg" src="assets/video/PatientHome.mp4"></video>
+        </div>
+        <figcaption><b>The day opens gently.</b> One question — what are you feeling? — and a breathing orb, not a dashboard.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/PatientChat.jpg" src="assets/video/PatientChat.mp4"></video>
+        </div>
+        <figcaption><b>Or type it.</b> Quick prompts start the thread; Jule answers with context from your own history.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/PatientSignIn.jpg" src="assets/video/PatientSignIn.mp4"></video>
+        </div>
+        <figcaption><b>No passwords.</b> A six-digit code from your inbox signs you in, and nothing else is asked of you.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<svg class="thread" style="color:#FFF4ED" viewBox="0 0 44 130" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M22 0 C 22 30 11 42 11 65 S 33 100 22 130" fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+  <path class="seam-dash" d="M22 0 C 22 30 11 42 11 65 S 33 100 22 130" fill="none" stroke="currentColor" stroke-width="2.4" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-dasharray="2 16"/>
+</svg>
+
+<!-- ============ Chapter 02 · Privacy ============ -->
+<section class="chapter chapter-dark" id="privacy">
+  <div class="chapter-inner">
+    <p class="kicker">02 · Privacy</p>
+    <h2>Sealed for one reader.</h2>
+    <p class="lede">Your story goes to your clinician and no one else. You choose exactly which
+      sources travel — check-ins, wearables, cycle history — and <strong>the report is encrypted
+      on your phone, for that one clinician's key, before it leaves</strong>.</p>
+
+    <div class="feature flip">
+      <div class="side">
+        <h3>Encrypted before it leaves the phone.</h3>
+        <p>The server only ever carries ciphertext; it cannot read what it stores. When your
+          clinician opens the report, it is decrypted with their doctor-only key, on their machine.
+          <strong>Not even HeyJule can look inside.</strong></p>
+      </div>
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/PatientSeal-a.jpg" src="assets/video/PatientSeal.mp4"></video>
+        </div>
+        <figcaption><b>Sealing it for your clinician.</b> Pick the sources, watch the export seal itself shut.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<svg class="thread" style="color:#E95031" viewBox="0 0 44 130" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M22 0 C 22 30 11 42 11 65 S 33 100 22 130" fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+  <path class="seam-dash" d="M22 0 C 22 30 11 42 11 65 S 33 100 22 130" fill="none" stroke="currentColor" stroke-width="2.4" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-dasharray="2 16"/>
+</svg>
+
+<!-- ============ Chapter 03 · The clinician side ============ -->
+<section class="chapter chapter-cream" id="clinician">
+  <div class="chapter-inner">
+    <p class="kicker">03 · The clinician side</p>
+    <h2>A year of history, a two-minute read.</h2>
+    <p class="lede">Seven minutes per patient is not enough time to reconstruct a year from
+      memory. HeyJule spends none of it on recollection: the consult starts from
+      <strong>a structured report where every finding links back to its source</strong> — the
+      check-in it came from, the night of sleep, the Apple Health reading.</p>
+
+    <div class="feature">
+      <div class="side">
+        <h3>Decrypted at the desk, not in the cloud.</h3>
+        <p>The sealed export opens in the clinician's browser with their private key. PROM scores,
+          symptom domains and their burden appear the moment it unlocks —
+          <strong>scored, sourced, and ready to discuss</strong>.</p>
+      </div>
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/DoctorDecrypt.jpg" src="assets/video/DoctorDecrypt.mp4"></video>
+        </div>
+        <figcaption><b>Ciphertext to clinical report.</b> Local decryption, then the scores count themselves up.</figcaption>
+      </figure>
+    </div>
+
+    <div class="duo">
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/DoctorDashboard.jpg" src="assets/video/DoctorDashboard.mp4"></video>
+        </div>
+        <figcaption><b>One code invites a patient.</b> Share it or the QR, and their next export arrives sealed for you.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="frame">
+          <video muted loop playsinline preload="none" poster="assets/stills/DoctorTrends.jpg" src="assets/video/DoctorTrends.mp4"></video>
+        </div>
+        <figcaption><b>Treatment response, made visible.</b> Sleep drawn against the day HRT started, symptom severity along the rail.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<svg class="thread" style="color:#3A150A" viewBox="0 0 44 130" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M22 0 C 22 30 11 42 11 65 S 33 100 22 130" fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+  <path class="seam-dash" d="M22 0 C 22 30 11 42 11 65 S 33 100 22 130" fill="none" stroke="currentColor" stroke-width="2.4" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-dasharray="2 16"/>
+</svg>
+
+<!-- ============ Chapter 04 · Under the hood ============ -->
+<section class="chapter" id="how">
+  <div class="chapter-inner">
+    <p class="kicker">04 · Under the hood</p>
+    <h2>Two apps, one connection layer.</h2>
+    <p class="lede">A patient mobile app and a clinician web app sit on a single shared spine that
+      moves data one way: <strong>from lived days to the desk, with consent at every step</strong>.</p>
+
+    <div class="steps">
+      <div class="step">
+        <h4>Gather</h4>
+        <p>Apple Health syncs sleep, pulse and activity on its own; check-ins — and notes handed over from ChatGPT — capture what the numbers can't.</p>
+      </div>
+      <div class="step">
+        <h4>Understand</h4>
+        <p>The conversation layer turns a minute of talking into structured symptoms, severities and timestamps — with how you felt about them kept alongside.</p>
+      </div>
+      <div class="step">
+        <h4>Seal</h4>
+        <p>The patient picks the sources and the reader; the export is encrypted end-to-end for that clinician alone.</p>
+      </div>
+      <div class="step">
+        <h4>Read</h4>
+        <p>The report decrypts locally in the clinician's browser: scores, trends and findings linked to source.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Closing ============ -->
+<section class="chapter" id="demos">
+  <div class="chapter-inner">
+    <p class="kicker">05 · See it yourself</p>
+    <h2>Both sides of the desk.</h2>
+
+    <div class="cta-links">
+      <a class="cta-card" href="#" aria-label="Open the patient demo">
+        <h3>Patient</h3>
+        <p>Log a symptom the moment it happens, and how you feel about it. Apple Health and ChatGPT fill in the rest on their own.</p>
+        <span class="go">Open demo
+          <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 11 L11 3 M5 3 h6 v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </a>
+      <a class="cta-card" href="#" aria-label="Open the clinician demo">
+        <h3>Clinician</h3>
+        <p>Seven minutes goes further when the year arrives as a two-minute read, every finding linked to its source.</p>
+        <span class="go">Open demo
+          <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 11 L11 3 M5 3 h6 v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </a>
+    </div>
+
+    <footer class="endnote">
+      <p class="scale">Starts with menopause. Built to scale to more conditions, for women and men.</p>
+      <p>Research and decision-support prototype, not a diagnostic tool. Product motion above is a faithful recreation of the working apps.</p>
+    </footer>
+  </div>
+</section>
+
+<script>
+  (function () {
+    var vids = document.querySelectorAll('.shot video');
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !('IntersectionObserver' in window)) {
+      vids.forEach(function (v) { v.controls = true; });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var v = entry.target;
+        if (entry.isIntersecting) {
+          v.muted = true;
+          var p = v.play();
+          if (p && p.catch) p.catch(function () {});
+        } else {
+          v.pause();
+        }
+      });
+    }, { threshold: 0.3 });
+    vids.forEach(function (v) { io.observe(v); });
+  })();
+</script>
 
 </body>
 </html>
