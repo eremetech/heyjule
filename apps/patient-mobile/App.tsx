@@ -4,9 +4,9 @@ import { Newsreader_500Medium } from "@expo-google-fonts/newsreader/500Medium";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
-import { ActivityIndicator, Animated, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ActivityIndicator, Animated, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { DeviceFrame } from "./src/components/DeviceFrame";
 import { SoftPressable } from "./src/components/SoftPressable";
 import { AuthProvider, useAuth } from "./src/auth/AuthProvider";
 import { CheckInScreen } from "./src/screens/CheckInScreen";
@@ -75,9 +75,15 @@ function AppShell() {
   );
 }
 
+// On web the heyjule:// deep link can't come back to us, so the emailed
+// 6-digit code is the primary sign-in there; on the phone the one-tap link
+// stays primary with the code as a fallback.
+const codeFirst = Platform.OS === "web";
+
 function PatientAppGate() {
   const auth = useAuth();
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   if (!auth.configured) return <AppShell />;
   if (auth.loading) {
     return (
@@ -88,6 +94,44 @@ function PatientAppGate() {
     );
   }
   if (auth.signedIn) return <AppShell />;
+  if (auth.awaitingCode) {
+    return (
+      <View style={styles.authRoot}>
+        <Text style={styles.authEyebrow}>CHECK YOUR EMAIL</Text>
+        <Text style={styles.authTitle}>Enter your{"\n"}sign-in code.</Text>
+        <Text style={styles.authDetail}>
+          We emailed a 6-digit code to {email.trim().toLowerCase()}. It expires in 5 minutes.
+        </Text>
+        <TextInput
+          style={[styles.authInput, styles.authCodeInput]}
+          value={code}
+          onChangeText={(value) => setCode(value.replace(/\D/gu, "").slice(0, 6))}
+          placeholder="000000"
+          placeholderTextColor={colors.inkFaint}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          textContentType="oneTimeCode"
+          maxLength={6}
+          onSubmitEditing={() => void auth.signInWithCode(email, code)}
+        />
+        {auth.error ? <Text style={styles.authError}>{auth.error}</Text> : null}
+        <SoftPressable onPress={() => void auth.signInWithCode(email, code)} style={styles.authButton}>
+          <Text style={styles.authButtonText}>Sign in</Text>
+          <Ionicons name="arrow-forward" size={17} color={colors.white} />
+        </SoftPressable>
+        <SoftPressable
+          onPress={() => {
+            setCode("");
+            void auth.requestCode(email);
+          }}
+          style={styles.authQuiet}
+        >
+          <Text style={styles.authQuietText}>Send a new code</Text>
+        </SoftPressable>
+      </View>
+    );
+  }
   if (auth.awaitingLink) {
     return (
       <View style={styles.authRoot}>
@@ -102,15 +146,21 @@ function PatientAppGate() {
           <Text style={styles.authButtonText}>Send it again</Text>
           <Ionicons name="refresh" size={17} color={colors.white} />
         </SoftPressable>
+        <SoftPressable onPress={() => void auth.requestCode(email)} style={styles.authQuiet}>
+          <Text style={styles.authQuietText}>Can&apos;t open the link? Email me a code</Text>
+        </SoftPressable>
       </View>
     );
   }
+  const requestPrimary = () => void (codeFirst ? auth.requestCode(email) : auth.signIn(email));
   return (
     <View style={styles.authRoot}>
       <Text style={styles.authEyebrow}>PRIVATE BY DESIGN</Text>
       <Text style={styles.authTitle}>Your health story,{"\n"}kept close.</Text>
       <Text style={styles.authDetail}>
-        Enter your email and we&apos;ll send you a secure one-tap sign-in link. No password needed.
+        {codeFirst
+          ? "Enter your email and we'll send you a 6-digit sign-in code. No password needed."
+          : "Enter your email and we'll send you a secure one-tap sign-in link. No password needed."}
       </Text>
       <TextInput
         style={styles.authInput}
@@ -122,13 +172,20 @@ function PatientAppGate() {
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="email"
-        onSubmitEditing={() => void auth.signIn(email)}
+        onSubmitEditing={requestPrimary}
       />
       {auth.error ? <Text style={styles.authError}>{auth.error}</Text> : null}
-      <SoftPressable onPress={() => void auth.signIn(email)} style={styles.authButton}>
-        <Text style={styles.authButtonText}>Email me a sign-in link</Text>
+      <SoftPressable onPress={requestPrimary} style={styles.authButton}>
+        <Text style={styles.authButtonText}>
+          {codeFirst ? "Email me a sign-in code" : "Email me a sign-in link"}
+        </Text>
         <Ionicons name="arrow-forward" size={17} color={colors.white} />
       </SoftPressable>
+      {codeFirst ? null : (
+        <SoftPressable onPress={() => void auth.requestCode(email)} style={styles.authQuiet}>
+          <Text style={styles.authQuietText}>Prefer a code? Email me one</Text>
+        </SoftPressable>
+      )}
     </View>
   );
 }
@@ -139,13 +196,13 @@ export default function App() {
   if (!fontsLoaded) return <View style={styles.root} />;
 
   return (
-    <SafeAreaProvider>
+    <DeviceFrame>
       <AuthProvider>
         <HealthStoreProvider>
           <PatientAppGate />
         </HealthStoreProvider>
       </AuthProvider>
-    </SafeAreaProvider>
+    </DeviceFrame>
   );
 }
 
@@ -190,6 +247,24 @@ const styles = StyleSheet.create({
     color: colors.inkFaint,
     fontSize: 15,
     lineHeight: 23,
+  },
+  authCodeInput: {
+    fontSize: 26,
+    fontWeight: "700",
+    letterSpacing: 10,
+    textAlign: "center",
+  },
+  authQuiet: {
+    marginTop: 16,
+    alignSelf: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  authQuietText: {
+    color: colors.inkSoft,
+    fontSize: 13.5,
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
   authInput: {
     minHeight: 54,

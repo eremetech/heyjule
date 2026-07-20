@@ -1,8 +1,8 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { bearer, jwt, magicLink } from "better-auth/plugins";
+import { bearer, emailOTP, jwt, magicLink } from "better-auth/plugins";
 import { db } from "./db.ts";
-import { sendMagicLinkEmail } from "./magic-mail.ts";
+import { sendMagicLinkEmail, sendOtpEmail } from "./magic-mail.ts";
 
 const production = process.env.NODE_ENV === "production";
 const baseURL =
@@ -49,9 +49,10 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user, ctx) => {
-          // Doctors register through the web sign-up form; the only path that
-          // creates users outside it is the patient magic-link flow.
-          if (ctx?.path?.includes("magic-link")) {
+          // Doctors register through the web sign-up form; the only paths that
+          // create users outside it are the patient magic-link and email-code
+          // flows, which must never mint doctor-role accounts.
+          if (ctx?.path?.includes("magic-link") || ctx?.path?.includes("email-otp")) {
             return { data: { ...user, role: "patient" } };
           }
           return { data: user };
@@ -100,6 +101,15 @@ export const auth = betterAuth({
         // The emailed link is an https page (mail clients strip custom schemes)
         // that forwards the untouched token into the app via heyjule://.
         await sendMagicLinkEmail(email, `${baseURL}/patient/verify?token=${encodeURIComponent(token)}`);
+      },
+    }),
+    emailOTP({
+      otpLength: 6,
+      expiresIn: 60 * 5,
+      sendVerificationOTP: async ({ email, otp }) => {
+        // The link-free path: patients type this code straight into the app,
+        // which the web build needs since heyjule:// deep links can't reach it.
+        await sendOtpEmail(email, otp);
       },
     }),
     bearer(),

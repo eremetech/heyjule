@@ -19,8 +19,13 @@ type AuthValue = {
   signedIn: boolean;
   /** A sign-in email has been sent and we're waiting for the link to be tapped. */
   awaitingLink: boolean;
+  /** A sign-in code email has been sent and we're waiting for the code entry. */
+  awaitingCode: boolean;
   error: string | null;
   signIn: (email: string) => Promise<void>;
+  /** Emails a 6-digit sign-in code instead of a link (works without deep links). */
+  requestCode: (email: string) => Promise<void>;
+  signInWithCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   getAccessToken: (forceRefresh?: boolean) => Promise<string | null>;
 };
@@ -49,6 +54,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(appConfig.authConfigured);
   const [signedIn, setSignedIn] = useState(Boolean(appConfig.devAccessToken));
   const [awaitingLink, setAwaitingLink] = useState(false);
+  const [awaitingCode, setAwaitingCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const persistSession = useCallback(async (token: string | null) => {
@@ -139,6 +145,69 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  const requestCode = useCallback(async (email: string) => {
+    if (appConfig.devAccessToken) {
+      setSignedIn(true);
+      return;
+    }
+    if (!appConfig.authConfigured || !appConfig.authUrl) {
+      setError("Secure sign-in is not configured yet.");
+      return;
+    }
+    const address = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(address)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetch(`${appConfig.authUrl}/api/auth/email-otp/send-verification-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: address, type: "sign-in" }),
+      });
+      if (!response.ok) throw new Error(`code request failed (${response.status})`);
+      setAwaitingCode(true);
+    } catch {
+      setError("HeyJule could not send the sign-in code. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const signInWithCode = useCallback(
+    async (email: string, code: string) => {
+      if (!appConfig.authUrl) return;
+      const address = email.trim().toLowerCase();
+      const otp = code.replace(/\D/gu, "");
+      if (otp.length < 6) {
+        setError("Enter the 6-digit code from the email.");
+        return;
+      }
+      setError(null);
+      setLoading(true);
+      try {
+        const response = await fetch(`${appConfig.authUrl}/api/auth/sign-in/email-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: address, otp }),
+        });
+        if (!response.ok) throw new Error(`code sign-in failed (${response.status})`);
+        const body = (await response.json()) as { token?: string };
+        if (!body.token) throw new Error("sign-in response had no session token");
+        await persistSession(body.token);
+        setAwaitingCode(false);
+        setAwaitingLink(false);
+      } catch {
+        setError("That code didn't work. Check the digits or request a new one.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [persistSession],
+  );
+
   const getAccessToken = useCallback(
     async (forceRefresh = false) => {
       if (appConfig.devAccessToken) return appConfig.devAccessToken;
@@ -175,6 +244,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const session = sessionRef.current;
     await persistSession(null);
     setAwaitingLink(false);
+    setAwaitingCode(false);
     if (session && appConfig.authUrl) {
       await fetch(`${appConfig.authUrl}/api/auth/sign-out`, {
         method: "POST",
@@ -189,12 +259,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
       loading,
       signedIn,
       awaitingLink,
+      awaitingCode,
       error,
       signIn,
+      requestCode,
+      signInWithCode,
       signOut,
       getAccessToken,
     }),
-    [awaitingLink, error, getAccessToken, loading, signIn, signOut, signedIn],
+    [awaitingCode, awaitingLink, error, getAccessToken, loading, requestCode, signIn, signInWithCode, signOut, signedIn],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
